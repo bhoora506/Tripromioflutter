@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'app_routes.dart';
+import '../presentation/screens/onboarding/onboarding_screen.dart';
 import '../presentation/screens/placeholder_screen.dart';
+import '../presentation/screens/splash/splash_screen.dart';
 
 /// Central route generator for the application.
 ///
@@ -10,8 +12,8 @@ abstract final class AppRouter {
   /// Returns the [RouteFactory] to pass to [MaterialApp.onGenerateRoute].
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     final Widget page = switch (settings.name) {
-      AppRoutes.splash => const PlaceholderScreen(label: 'Splash'),
-      AppRoutes.onboarding => const PlaceholderScreen(label: 'Onboarding'),
+      AppRoutes.splash => const SplashScreen(),
+      AppRoutes.onboarding => const OnboardingScreen(),
       AppRoutes.login => const PlaceholderScreen(label: 'Login'),
       AppRoutes.register => const PlaceholderScreen(label: 'Register'),
       AppRoutes.home => const PlaceholderScreen(label: 'Home'),
