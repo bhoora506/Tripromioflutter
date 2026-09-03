@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_routes.dart';
+import '../presentation/screens/home/home_screen.dart';
 import '../presentation/screens/onboarding/onboarding_screen.dart';
 import '../presentation/screens/placeholder_screen.dart';
 import '../presentation/screens/splash/splash_screen.dart';
@@ -16,7 +17,7 @@ abstract final class AppRouter {
       AppRoutes.onboarding => const OnboardingScreen(),
       AppRoutes.login => const PlaceholderScreen(label: 'Login'),
       AppRoutes.register => const PlaceholderScreen(label: 'Register'),
-      AppRoutes.home => const PlaceholderScreen(label: 'Home'),
+      AppRoutes.home => const HomeScreen(),
       AppRoutes.profile => const PlaceholderScreen(label: 'Profile'),
       AppRoutes.trips => const PlaceholderScreen(label: 'Trips'),
       AppRoutes.tripDetail => const PlaceholderScreen(label: 'Trip Detail'),
