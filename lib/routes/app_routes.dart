@@ -13,6 +13,7 @@ abstract final class AppRoutes {
   // ── Main shell ────────────────────────────────────────────────────────────
   static const String home = '/home';
   static const String profile = '/profile';
+  static const String editProfile = '/profile/edit';
 
   // ── Trips ─────────────────────────────────────────────────────────────────
   static const String trips = '/trips';

@@ -8,6 +8,8 @@ import '../presentation/screens/companions/search_results_screen.dart';
 import '../presentation/screens/home/home_screen.dart';
 import '../presentation/screens/onboarding/onboarding_screen.dart';
 import '../presentation/screens/placeholder_screen.dart';
+import '../presentation/screens/profile/edit_profile_screen.dart';
+import '../presentation/screens/profile/profile_screen.dart';
 import '../presentation/screens/splash/splash_screen.dart';
 import '../presentation/screens/trips/trip_details_screen.dart';
 
@@ -29,8 +31,11 @@ abstract final class AppRouter {
       AppRoutes.register => const RegisterScreen(),
       AppRoutes.forgotPassword => const ForgotPasswordScreen(),
 
-      // ── Profile / Trips (placeholder until later phases) ──────────────────
-      AppRoutes.profile => const PlaceholderScreen(label: 'Profile'),
+      // ── Profile ────────────────────────────────────────────────────────────
+      AppRoutes.profile => const ProfileScreen(),
+      AppRoutes.editProfile => const EditProfileScreen(),
+
+      // ── Trips (placeholder until later phase) ────────────────────────
       AppRoutes.trips => const PlaceholderScreen(label: 'Trips'),
       AppRoutes.createTrip => const PlaceholderScreen(label: 'Create Trip'),
 
