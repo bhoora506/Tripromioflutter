@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'app_routes.dart';
+import '../presentation/screens/auth/forgot_password_screen.dart';
+import '../presentation/screens/auth/login_screen.dart';
+import '../presentation/screens/auth/register_screen.dart';
 import '../presentation/screens/companions/find_companions_screen.dart';
 import '../presentation/screens/companions/search_results_screen.dart';
 import '../presentation/screens/home/home_screen.dart';
@@ -21,9 +24,10 @@ abstract final class AppRouter {
       AppRoutes.onboarding => const OnboardingScreen(),
       AppRoutes.home => const HomeScreen(),
 
-      // ── Auth (placeholder until Phase A) ──────────────────────────────────
-      AppRoutes.login => const PlaceholderScreen(label: 'Login'),
-      AppRoutes.register => const PlaceholderScreen(label: 'Register'),
+      // ── Auth ────────────────────────────────────────────────────────
+      AppRoutes.login => const LoginScreen(),
+      AppRoutes.register => const RegisterScreen(),
+      AppRoutes.forgotPassword => const ForgotPasswordScreen(),
 
       // ── Profile / Trips (placeholder until later phases) ──────────────────
       AppRoutes.profile => const PlaceholderScreen(label: 'Profile'),
