@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/network/api_exception.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/services/auth_service.dart';
 import '../../../routes/app_routes.dart';
 
 /// Production splash screen for Tripromio.
@@ -24,7 +27,8 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  // ── Animation controllers ─────────────────────────────────────────────────
+  // Controllers are intentionally kept separate so the auth check and
+  // the animation can run concurrently via [Future.wait].
   late final AnimationController _logoController;
   late final AnimationController _taglineController;
 
@@ -32,6 +36,10 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _logoFade;
   late final Animation<double> _logoScale;
   late final Animation<double> _taglineFade;
+
+  // ── Services ──────────────────────────────────────────────────────────────
+  final _tokenStorage = TokenStorage();
+  final _authService = AuthService();
 
   // ── Timing constants ──────────────────────────────────────────────────────
   static const Duration _logoDuration = Duration(milliseconds: 800);
@@ -78,30 +86,78 @@ class _SplashScreenState extends State<SplashScreen>
     _startSequence();
   }
 
-  Future<void> _startSequence() async {
-    // Start logo animation immediately.
-    _logoController.forward();
-
-    // Start tagline after delay.
-    await Future<void>.delayed(_taglineDelay);
-    if (!mounted) return;
-    _taglineController.forward();
-
-    // Navigate after total splash duration.
-    await Future<void>.delayed(_totalSplashDuration - _taglineDelay);
-    if (!mounted) return;
-    _navigate();
-  }
-
-  void _navigate() {
-    Navigator.of(context).pushReplacementNamed(AppRoutes.onboarding);
-  }
 
   @override
   void dispose() {
     _logoController.dispose();
     _taglineController.dispose();
+    _authService.dispose();
     super.dispose();
+  }
+
+  // ── Auth-state resolution ─────────────────────────────────────────────────
+
+  /// Runs the splash animation and auth check **in parallel**, then navigates
+  /// exactly once when both are done.  This prevents any UI flicker.
+  Future<void> _startSequence() async {
+    // Kick off animation immediately.
+    _logoController.forward();
+
+    await Future<void>.delayed(_taglineDelay);
+    if (!mounted) return;
+    _taglineController.forward();
+
+    // Run the remaining animation time and the auth check concurrently.
+    // The navigation waits for whichever finishes last.
+    final authDestFuture = _resolveAuthDestination();
+    final minSplashFuture = Future<void>.delayed(
+      _totalSplashDuration - _taglineDelay,
+    );
+
+    final results = await Future.wait([authDestFuture, minSplashFuture]);
+    if (!mounted) return;
+
+    final destination = results[0] as String;
+    Navigator.of(context).pushReplacementNamed(destination);
+  }
+
+  /// Determines the correct post-splash route based on auth state.
+  ///
+  /// Decision tree:
+  ///   1. No stored token          → show onboarding (first time) or login
+  ///   2. Token + /me OK           → Home (authenticated)
+  ///   3. Token + /me 401          → delete token → login
+  ///   4. Token + network/server   → login (token preserved for next launch)
+  Future<String> _resolveAuthDestination() async {
+    final token = await _tokenStorage.getToken();
+
+    // ── Case 1: No token ────────────────────────────────────────────────────
+    if (token == null || token.isEmpty) {
+      final seenOnboarding = await _tokenStorage.hasSeenOnboarding();
+      return seenOnboarding ? AppRoutes.login : AppRoutes.onboarding;
+    }
+
+    // ── Cases 2-4: Token exists — verify with backend ───────────────────────
+    try {
+      await _authService.getCurrentUser();
+      // Case 2: /auth/me succeeded → authenticated.
+      return AppRoutes.home;
+    } on UnauthorizedException {
+      // Case 3: Token revoked/expired → clean up.
+      await _tokenStorage.deleteToken();
+      return AppRoutes.login;
+    } on NetworkException {
+      // Case 4: Server unreachable — keep token, let user retry later.
+      // Send to login so they can manually trigger the auth check again
+      // (they can log in, which will refresh the token).
+      return AppRoutes.login;
+    } on ApiException {
+      // Unexpected API error (5xx etc.) — safe fallback, keep token.
+      return AppRoutes.login;
+    } catch (_) {
+      // Unknown error — safe fallback, keep token.
+      return AppRoutes.login;
+    }
   }
 
   @override

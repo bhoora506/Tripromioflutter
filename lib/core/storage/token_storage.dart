@@ -22,12 +22,18 @@ class TokenStorage {
   final FlutterSecureStorage _storage;
 
   static const String _tokenKey = 'tripromio_auth_token';
+  static const String _onboardingKey = 'tripromio_onboarding_seen';
 
   // ── Write ─────────────────────────────────────────────────────────────────
 
   /// Persist [token] securely.  Overwrites any existing value.
   Future<void> saveToken(String token) async {
     await _storage.write(key: _tokenKey, value: token);
+  }
+
+  /// Mark onboarding as seen.
+  Future<void> setOnboardingSeen() async {
+    await _storage.write(key: _onboardingKey, value: 'true');
   }
 
   // ── Read ──────────────────────────────────────────────────────────────────
@@ -41,6 +47,12 @@ class TokenStorage {
   Future<bool> hasToken() async {
     final value = await _storage.read(key: _tokenKey);
     return value != null && value.isNotEmpty;
+  }
+
+  /// Returns `true` if onboarding has been seen.
+  Future<bool> hasSeenOnboarding() async {
+    final value = await _storage.read(key: _onboardingKey);
+    return value == 'true';
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────

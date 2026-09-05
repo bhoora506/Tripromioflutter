@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../routes/app_routes.dart';
 
@@ -51,6 +52,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     with TickerProviderStateMixin {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  final _tokenStorage = TokenStorage();
 
   late AnimationController _textAnimController;
   late Animation<double> _textFade;
@@ -144,8 +146,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
   }
 
-  void _finish() {
-    Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+  /// Called when the user finishes or skips onboarding.
+  ///
+  /// Marks onboarding as done so it is never shown again, then sends the
+  /// unauthenticated user to the Login screen.
+  Future<void> _finish() async {
+    await _tokenStorage.setOnboardingSeen();
+    if (!mounted) return;
+    Navigator.of(context).pushReplacementNamed(AppRoutes.login);
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
