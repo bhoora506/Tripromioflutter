@@ -39,6 +39,12 @@ dependencies:
   # without bundling font files into the repo.
   google_fonts: ^6.2.1
 
+  # HTTP client – lightweight standard package for REST API calls.
+  http: ^1.2.2
+
+  # Secure token storage — stores Sanctum Bearer token in Android Keystore / iOS Keychain.
+  flutter_secure_storage: ^9.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
