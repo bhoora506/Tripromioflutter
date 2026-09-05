@@ -15,10 +15,12 @@ abstract final class AppRoutes {
 
   // ── Trips ─────────────────────────────────────────────────────────────────
   static const String trips = '/trips';
-  static const String tripDetail = '/trips/detail';
+  static const String tripDetail = '/trips/:tripId';
   static const String createTrip = '/trips/create';
 
-  // ── Matching ──────────────────────────────────────────────────────────────
+  // ── Matching / Companions ──────────────────────────────────────────────────────
+  static const String findCompanions = '/find-companions';
+  static const String searchResults = '/find-companions/results';
   static const String discover = '/discover';
   static const String matchDetail = '/discover/match';
 

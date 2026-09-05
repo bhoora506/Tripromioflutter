@@ -622,7 +622,7 @@ class _SearchBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        // Search functionality will be wired in a later phase.
+        Navigator.of(context).pushNamed(AppRoutes.findCompanions);
       },
       child: Container(
         height: 52,
