@@ -34,10 +34,18 @@ class UserModel {
   bool get isEmailVerified => emailVerifiedAt != null;
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    int parseInt(dynamic value) {
+      if (value == null) return 0;
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value) ?? 0;
+      if (value is num) return value.toInt();
+      return 0;
+    }
+
     return UserModel(
-      id: json['id'] as int,
-      name: json['name'] as String,
-      email: json['email'] as String,
+      id: parseInt(json['id']),
+      name: json['name'] as String? ?? '',
+      email: json['email'] as String? ?? '',
       emailVerifiedAt: json['email_verified_at'] as String?,
       profile: json['profile'] != null
           ? UserProfileModel.fromJson(json['profile'] as Map<String, dynamic>)
@@ -46,8 +54,8 @@ class UserModel {
               ?.map((i) => InterestModel.fromJson(i as Map<String, dynamic>))
               .toList() ??
           [],
-      profileCompletion: json['profile_completion'] as int? ?? 0,
-      createdAt: json['created_at'] as String,
+      profileCompletion: parseInt(json['profile_completion']),
+      createdAt: json['created_at'] as String? ?? '',
     );
   }
 

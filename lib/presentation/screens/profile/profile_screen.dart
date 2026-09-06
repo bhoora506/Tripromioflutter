@@ -111,6 +111,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = e.message);
+    } catch (e, stack) {
+      if (!mounted) return;
+      setState(() => _errorMessage = 'An unexpected error occurred: ');
+      debugPrint('Unexpected error in profile _load: \n');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
