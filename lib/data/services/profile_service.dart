@@ -2,6 +2,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/network/api_client.dart';
 import '../models/user_model.dart';
 import '../models/interest_model.dart';
+import '../models/preferred_destination_model.dart';
 
 /// Service for profile-related API calls.
 ///
@@ -157,6 +158,55 @@ class ProfileService {
       return UserModel.fromJson(data);
     }
     return UserModel.fromJson(userJson);
+  }
+
+
+
+  // ── GET /api/profile/destinations ─────────────────────────────────────────
+
+  Future<List<PreferredDestinationModel>> getPreferredDestinations() async {
+    final response = await _client.get(ApiConstants.profileDestinations);
+    final data = response.dataAsMap;
+    final destList = data['destinations'] as List<dynamic>? ?? [];
+    return destList
+        .map((i) => PreferredDestinationModel.fromJson(i as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── POST /api/profile/destinations ────────────────────────────────────────
+
+  Future<PreferredDestinationModel> addPreferredDestination(String destination) async {
+    final response = await _client.post(
+      ApiConstants.profileDestinations,
+      body: {'destination': destination},
+    );
+    final data = response.dataAsMap;
+    final destJson = data['destination'] as Map<String, dynamic>?;
+    if (destJson == null) {
+      return PreferredDestinationModel.fromJson(data);
+    }
+    return PreferredDestinationModel.fromJson(destJson);
+  }
+
+  // ── PUT /api/profile/destinations/{id} ────────────────────────────────────
+
+  Future<PreferredDestinationModel> updatePreferredDestination(int id, String destination) async {
+    final response = await _client.put(
+      '${ApiConstants.profileDestinations}/$id',
+      body: {'destination': destination},
+    );
+    final data = response.dataAsMap;
+    final destJson = data['destination'] as Map<String, dynamic>?;
+    if (destJson == null) {
+      return PreferredDestinationModel.fromJson(data);
+    }
+    return PreferredDestinationModel.fromJson(destJson);
+  }
+
+  // ── DELETE /api/profile/destinations/{id} ─────────────────────────────────
+
+  Future<void> deletePreferredDestination(int id) async {
+    await _client.delete('${ApiConstants.profileDestinations}/$id');
   }
 
   void dispose() => _client.dispose();

@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/user_model.dart';
+import '../../../data/models/preferred_destination_model.dart';
 import '../../../data/services/profile_service.dart';
 import '../../../routes/app_routes.dart';
 
@@ -57,6 +58,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loading = true;
   bool _photoUploading = false;
   String? _errorMessage;
+  List<PreferredDestinationModel>? _destinations;
+  String? _destinationsError;
 
   @override
   void initState() {
@@ -76,11 +79,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _loading = true;
       _errorMessage = null;
+      _destinationsError = null;
     });
+    
     try {
+      // Load user profile
       final user = await _service.getProfile();
+      
+      // Try to load destinations, but don't fail profile if it fails
+      List<PreferredDestinationModel>? destList;
+      String? destErr;
+      try {
+        destList = await _service.getPreferredDestinations();
+      } catch (e) {
+        destErr = 'Failed to load destinations.';
+      }
+      
       if (!mounted) return;
-      setState(() => _user = user);
+      setState(() {
+        _user = user;
+        _destinations = destList;
+        _destinationsError = destErr;
+      });
     } on NetworkException {
       if (!mounted) return;
       setState(() => _errorMessage = 'No internet connection. Please retry.');
@@ -116,6 +136,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (updated is UserModel && mounted) {
       setState(() => _user = updated);
+    }
+  }
+
+
+  Future<void> _openDestinations() async {
+    final updated = await Navigator.of(context).pushNamed(
+      AppRoutes.preferredDestinations,
+    );
+    if (updated is List<PreferredDestinationModel> && mounted) {
+      setState(() => _destinations = updated);
     }
   }
 
@@ -268,6 +298,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onEdit: _openEdit,
                   onPhotoEdit: _showPhotoOptions,
                   onEditInterests: _openEditInterests,
+                  onEditDestinations: _openDestinations,
+                  destinations: _destinations,
+                  destinationsError: _destinationsError,
                 ),
     );
   }
@@ -459,6 +492,9 @@ class _ProfileBody extends StatelessWidget {
     required this.onEdit,
     required this.onPhotoEdit,
     required this.onEditInterests,
+    required this.onEditDestinations,
+    required this.destinations,
+    required this.destinationsError,
   });
 
   final UserModel user;
@@ -466,6 +502,9 @@ class _ProfileBody extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onPhotoEdit;
   final VoidCallback onEditInterests;
+  final VoidCallback onEditDestinations;
+  final List<PreferredDestinationModel>? destinations;
+  final String? destinationsError;
 
   @override
   Widget build(BuildContext context) {
@@ -491,6 +530,11 @@ class _ProfileBody extends StatelessWidget {
         // Sections
         SliverToBoxAdapter(child: _AboutSection(user: user)),
         SliverToBoxAdapter(child: _TravelSection(user: user, onEditInterests: onEditInterests)),
+        SliverToBoxAdapter(child: _DestinationsSection(
+          destinations: destinations, 
+          error: destinationsError, 
+          onEdit: onEditDestinations,
+        )),
         SliverToBoxAdapter(child: _BudgetSection(user: user)),
 
         // Bottom breathing room
@@ -1082,6 +1126,74 @@ class _EmptyHint extends StatelessWidget {
         color: AppColors.textHintLight,
         fontStyle: FontStyle.italic,
       ),
+    );
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Preferred Destinations Section
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DestinationsSection extends StatelessWidget {
+  const _DestinationsSection({
+    required this.destinations,
+    required this.error,
+    required this.onEdit,
+  });
+
+  final List<PreferredDestinationModel>? destinations;
+  final String? error;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    if (error != null) {
+      return _Section(
+        title: 'Preferred Destinations',
+        icon: Icons.place_rounded,
+        onEdit: onEdit,
+        children: [
+          Text(
+            error!,
+            style: GoogleFonts.nunito(
+              fontSize: 14,
+              color: AppColors.error,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (destinations == null || destinations!.isEmpty) {
+      return _Section(
+        title: 'Preferred Destinations',
+        icon: Icons.place_rounded,
+        onEdit: onEdit,
+        children: [
+          Text(
+            'No destinations added yet.',
+            style: GoogleFonts.nunito(
+              fontSize: 14,
+              color: AppColors.textSecondaryLight,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return _Section(
+      title: 'Preferred Destinations',
+      icon: Icons.place_rounded,
+      onEdit: onEdit,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: destinations!.map((d) => _Tag(label: d.destination)).toList(),
+        ),
+      ],
     );
   }
 }

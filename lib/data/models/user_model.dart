@@ -1,11 +1,11 @@
-/// Represents the authenticated user as returned by the Tripromio backend.
+// Represents the authenticated user as returned by the Tripromio backend.
 ///
 /// Matches the `UserResource` JSON shape from:
-///   POST /api/auth/login
-///   POST /api/auth/register
-///   GET  /api/auth/me
+//   POST /api/auth/login
+//   POST /api/auth/register
+//   GET  /api/auth/me
 ///
-/// All nullable fields are optional in the backend response
+// All nullable fields are optional in the backend response
 /// (e.g. `profile` is null until the user completes it).
 import 'interest_model.dart';
 
@@ -89,6 +89,13 @@ class UserProfileModel {
   final double? preferredBudgetMax;
 
   factory UserProfileModel.fromJson(Map<String, dynamic> json) {
+    double? parseDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value);
+      return null;
+    }
+
     return UserProfileModel(
       bio: json['bio'] as String?,
       city: json['city'] as String?,
@@ -99,8 +106,8 @@ class UserProfileModel {
           [],
       travelStyle: json['travel_style'] as String?,
       profilePhotoUrl: json['profile_photo_url'] as String?,
-      preferredBudgetMin: (json['preferred_budget_min'] as num?)?.toDouble(),
-      preferredBudgetMax: (json['preferred_budget_max'] as num?)?.toDouble(),
+      preferredBudgetMin: parseDouble(json['preferred_budget_min']),
+      preferredBudgetMax: parseDouble(json['preferred_budget_max']),
     );
   }
 
