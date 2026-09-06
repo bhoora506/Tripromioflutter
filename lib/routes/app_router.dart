@@ -10,6 +10,8 @@ import '../presentation/screens/onboarding/onboarding_screen.dart';
 import '../presentation/screens/placeholder_screen.dart';
 import '../presentation/screens/profile/edit_profile_screen.dart';
 import '../presentation/screens/profile/profile_screen.dart';
+import '../presentation/screens/profile/edit_interests_screen.dart';
+import '../data/models/interest_model.dart';
 import '../presentation/screens/splash/splash_screen.dart';
 import '../presentation/screens/trips/trip_details_screen.dart';
 
@@ -34,6 +36,9 @@ abstract final class AppRouter {
       // ── Profile ────────────────────────────────────────────────────────────
       AppRoutes.profile => const ProfileScreen(),
       AppRoutes.editProfile => const EditProfileScreen(),
+      AppRoutes.editInterests => EditInterestsScreen(
+        currentInterests: settings.arguments as List<InterestModel>? ?? [],
+      ),
 
       // ── Trips (placeholder until later phase) ────────────────────────
       AppRoutes.trips => const PlaceholderScreen(label: 'Trips'),

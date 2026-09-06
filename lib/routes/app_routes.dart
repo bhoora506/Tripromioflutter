@@ -14,6 +14,7 @@ abstract final class AppRoutes {
   static const String home = '/home';
   static const String profile = '/profile';
   static const String editProfile = '/profile/edit';
+  static const String editInterests = '/profile/interests';
 
   // ── Trips ─────────────────────────────────────────────────────────────────
   static const String trips = '/trips';

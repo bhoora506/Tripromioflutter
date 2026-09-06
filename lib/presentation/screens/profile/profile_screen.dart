@@ -108,7 +108,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+
+  Future<void> _openEditInterests() async {
+    final updated = await Navigator.of(context).pushNamed(
+      AppRoutes.editInterests,
+      arguments: _user?.interests ?? [],
+    );
+    if (updated is UserModel && mounted) {
+      setState(() => _user = updated);
+    }
+  }
+
   // ── Photo edit bottom sheet ───────────────────────────────────────────────
+
 
   /// Shows the bottom sheet with "Choose Photo" / "Remove Photo" / "Cancel".
   void _showPhotoOptions() {
@@ -255,6 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   photoUploading: _photoUploading,
                   onEdit: _openEdit,
                   onPhotoEdit: _showPhotoOptions,
+                  onEditInterests: _openEditInterests,
                 ),
     );
   }
@@ -445,12 +458,14 @@ class _ProfileBody extends StatelessWidget {
     required this.photoUploading,
     required this.onEdit,
     required this.onPhotoEdit,
+    required this.onEditInterests,
   });
 
   final UserModel user;
   final bool photoUploading;
   final VoidCallback onEdit;
   final VoidCallback onPhotoEdit;
+  final VoidCallback onEditInterests;
 
   @override
   Widget build(BuildContext context) {
@@ -475,7 +490,7 @@ class _ProfileBody extends StatelessWidget {
 
         // Sections
         SliverToBoxAdapter(child: _AboutSection(user: user)),
-        SliverToBoxAdapter(child: _TravelSection(user: user)),
+        SliverToBoxAdapter(child: _TravelSection(user: user, onEditInterests: onEditInterests)),
         SliverToBoxAdapter(child: _BudgetSection(user: user)),
 
         // Bottom breathing room
@@ -849,9 +864,10 @@ class _AboutSection extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TravelSection extends StatelessWidget {
-  const _TravelSection({required this.user});
+  const _TravelSection({required this.user, required this.onEditInterests});
 
   final UserModel user;
+  final VoidCallback onEditInterests;
 
   static const Map<String, String> _styleLabels = {
     'adventure': '🏔️ Adventure',
@@ -870,8 +886,9 @@ class _TravelSection extends StatelessWidget {
     final interests = user.interests;
 
     return _Section(
-      title: 'Travel Style',
+      title: 'Travel Style & Interests',
       icon: Icons.explore_rounded,
+      onEdit: onEditInterests,
       children: [
         if (style != null)
           _Tag(
@@ -886,7 +903,7 @@ class _TravelSection extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children:
-                interests.map((i) => _Tag(label: i)).toList(),
+                interests.map((i) => _Tag(label: i.name)).toList(),
           ),
         ],
       ],
@@ -946,11 +963,13 @@ class _Section extends StatelessWidget {
     required this.title,
     required this.icon,
     required this.children,
+    this.onEdit,
   });
 
   final String title;
   final IconData icon;
   final List<Widget> children;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -985,6 +1004,16 @@ class _Section extends StatelessWidget {
                   letterSpacing: 0.1,
                 ),
               ),
+              const Spacer(),
+              if (onEdit != null)
+                GestureDetector(
+                  onTap: onEdit,
+                  child: const Icon(
+                    Icons.edit_rounded,
+                    size: 16,
+                    color: AppColors.textSecondaryLight,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 14),

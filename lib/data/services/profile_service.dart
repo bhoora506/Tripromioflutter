@@ -1,6 +1,7 @@
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_client.dart';
 import '../models/user_model.dart';
+import '../models/interest_model.dart';
 
 /// Service for profile-related API calls.
 ///
@@ -126,6 +127,36 @@ class ProfileService {
     await _client.delete(ApiConstants.profilePhoto);
     // Re-fetch the profile to get the authoritative cleared state.
     return getProfile();
+  }
+
+
+  // ── GET /api/interests ────────────────────────────────────────────────────
+
+  /// Fetch the master list of all available interests.
+  Future<List<InterestModel>> getInterests() async {
+    final response = await _client.get(ApiConstants.interests);
+    final data = response.dataAsMap;
+    final interestsList = data['interests'] as List<dynamic>? ?? [];
+    return interestsList
+        .map((i) => InterestModel.fromJson(i as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── PUT /api/profile/interests ────────────────────────────────────────────
+
+  /// Update the authenticated user's interests (sync semantics).
+  Future<UserModel> updateInterests(List<int> interestIds) async {
+    final response = await _client.put(
+      ApiConstants.profileInterests,
+      body: {'interest_ids': interestIds},
+    );
+
+    final data = response.dataAsMap;
+    final userJson = data['user'] as Map<String, dynamic>?;
+    if (userJson == null) {
+      return UserModel.fromJson(data);
+    }
+    return UserModel.fromJson(userJson);
   }
 
   void dispose() => _client.dispose();

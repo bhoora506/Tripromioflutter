@@ -7,6 +7,8 @@
 ///
 /// All nullable fields are optional in the backend response
 /// (e.g. `profile` is null until the user completes it).
+import 'interest_model.dart';
+
 class UserModel {
   const UserModel({
     required this.id,
@@ -24,7 +26,7 @@ class UserModel {
   final String email;
   final String? emailVerifiedAt;
   final UserProfileModel? profile;
-  final List<String> interests;
+  final List<InterestModel> interests;
   final int profileCompletion;
   final String createdAt;
 
@@ -41,7 +43,7 @@ class UserModel {
           ? UserProfileModel.fromJson(json['profile'] as Map<String, dynamic>)
           : null,
       interests: (json['interests'] as List<dynamic>?)
-              ?.map((i) => (i as Map<String, dynamic>)['name'] as String)
+              ?.map((i) => InterestModel.fromJson(i as Map<String, dynamic>))
               .toList() ??
           [],
       profileCompletion: json['profile_completion'] as int? ?? 0,
@@ -55,6 +57,7 @@ class UserModel {
         'email': email,
         'email_verified_at': emailVerifiedAt,
         'profile': profile?.toJson(),
+        'interests': interests.map((e) => e.toJson()).toList(),
         'profile_completion': profileCompletion,
         'created_at': createdAt,
       };
