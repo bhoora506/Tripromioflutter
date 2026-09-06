@@ -45,6 +45,10 @@ dependencies:
   # Secure token storage — stores Sanctum Bearer token in Android Keystore / iOS Keychain.
   flutter_secure_storage: ^9.2.2
 
+  # Gallery image picker — allows selecting a profile photo from the device gallery.
+  # Gallery-only; camera capture is NOT used in this phase.
+  image_picker: ^1.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -7,8 +7,10 @@ import '../models/user_model.dart';
 /// Wraps [ApiClient] — the UI never touches the HTTP layer directly.
 ///
 /// Endpoints covered:
-///   GET  /api/profile  → [getProfile]
-///   PUT  /api/profile  → [updateProfile]
+///   GET    /api/profile        → [getProfile]
+///   PUT    /api/profile        → [updateProfile]
+///   POST   /api/profile/photo  → [uploadProfilePhoto]
+///   DELETE /api/profile/photo  → [deleteProfilePhoto]
 class ProfileService {
   ProfileService({ApiClient? client}) : _client = client ?? ApiClient();
 
@@ -81,6 +83,49 @@ class ProfileService {
       return UserModel.fromJson(data);
     }
     return UserModel.fromJson(userJson);
+  }
+
+  // ── POST /api/profile/photo ───────────────────────────────────────────────
+
+  /// Upload a new profile photo.
+  ///
+  /// [filePath] must be the absolute path to the selected image file.
+  ///
+  /// Sends a multipart/form-data POST with field name `photo`.
+  /// The backend accepts jpeg, jpg, png, webp up to 5 MB.
+  ///
+  /// Returns the updated [UserModel] containing the new [profile_photo_url].
+  ///
+  /// Throws [ApiException] subclasses on failure (including [ValidationException]
+  /// for 422 if the file is invalid or too large).
+  Future<UserModel> uploadProfilePhoto(String filePath) async {
+    final response = await _client.postMultipart(
+      ApiConstants.profilePhoto,
+      fileField: 'photo',
+      filePath: filePath,
+    );
+
+    final data = response.dataAsMap;
+    final userJson = data['user'] as Map<String, dynamic>?;
+    if (userJson == null) {
+      return UserModel.fromJson(data);
+    }
+    return UserModel.fromJson(userJson);
+  }
+
+  // ── DELETE /api/profile/photo ─────────────────────────────────────────────
+
+  /// Remove the current profile photo.
+  ///
+  /// Sends an authenticated DELETE to /api/profile/photo.
+  /// On success, re-fetches the profile so the caller receives the
+  /// updated [UserModel] with [profile_photo_url] cleared.
+  ///
+  /// Throws [ApiException] subclasses on failure.
+  Future<UserModel> deleteProfilePhoto() async {
+    await _client.delete(ApiConstants.profilePhoto);
+    // Re-fetch the profile to get the authoritative cleared state.
+    return getProfile();
   }
 
   void dispose() => _client.dispose();

@@ -1,6 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- INTERNET permission required for API calls -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Gallery access for profile photo upload (image_picker) -->
+    <!-- Android 13+ (API 33+): uses READ_MEDIA_IMAGES instead of READ_EXTERNAL_STORAGE -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <!-- Android ≤12 fallback. maxSdkVersion prevents it from appearing on Android 13+ -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
+
     <application
         android:label="tripromio"
         android:name="${applicationName}"

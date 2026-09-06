@@ -106,6 +106,55 @@ class ApiClient {
     }
   }
 
+  // ── Multipart (for profile photo upload) ─────────────────────────────────
+
+  /// Send a multipart/form-data POST request.
+  ///
+  /// [fileField] is the form field name expected by the backend (`photo`).
+  /// [filePath] is the absolute path of the local file.
+  ///
+  /// Headers set automatically:
+  ///   • `Accept: application/json`
+  ///   • `Authorization: Bearer <token>`
+  ///
+  /// `Content-Type: multipart/form-data; boundary=...` is added by the
+  /// http package automatically — never set it manually.
+  Future<ApiResponse> postMultipart(
+    String path, {
+    required String fileField,
+    required String filePath,
+    Map<String, String>? fields,
+  }) async {
+    final uri = _buildUri(path);
+
+    // Build headers WITHOUT Content-Type — the multipart request sets it.
+    final headers = await _buildHeaders(withContentType: false);
+
+    try {
+      final request = http.MultipartRequest('POST', uri)
+        ..headers.addAll(headers);
+
+      // Add any additional text fields.
+      if (fields != null) request.fields.addAll(fields);
+
+      // Attach the file.
+      final mf = await http.MultipartFile.fromPath(fileField, filePath);
+      request.files.add(mf);
+
+      final streamed = await request.send().timeout(ApiConstants.receiveTimeout);
+      final response = await http.Response.fromStream(streamed);
+      return _handleResponse(response);
+    } on ApiException {
+      rethrow;
+    } on SocketException catch (e) {
+      throw NetworkException('Connection failed: ${e.message}');
+    } on http.ClientException catch (e) {
+      throw NetworkException('Request failed: ${e.message}');
+    } catch (e) {
+      throw NetworkException('Unexpected error: $e');
+    }
+  }
+
   // ── Internals ─────────────────────────────────────────────────────────────
 
   Uri _buildUri(String path, {Map<String, String>? queryParams}) {
@@ -185,6 +234,8 @@ class ApiClient {
         throw NotFoundException(message);
       case 409:
         throw ConflictException(message);
+      case 413:
+        throw ServerException('File too large. Please choose a smaller image.');
       case 422:
         throw ValidationException(message, errors: fieldErrors);
       case 429:

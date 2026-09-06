@@ -1,12 +1,42 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/services/profile_service.dart';
 import '../../../routes/app_routes.dart';
+
+// ─── Photo URL helper ────────────────────────────────────────────────────────
+
+/// Resolves a profile photo URL from the backend to an absolute URL.
+///
+/// The backend may return:
+///   a) A full URL: https://... (production) or http://... (local dev) → use as-is
+///   b) A relative path: storage/... or profile_photos/... → prepend the
+///      backend host (http://10.0.2.2:8000 on Android emulator).
+///
+/// This function never throws; it returns null if [raw] is null/empty.
+String? resolvePhotoUrl(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  // Relative path — prepend the Laravel dev host.
+  // ApiConstants.baseUrl is 'http://10.0.2.2:8000/api' — strip the /api suffix.
+  const devHost = 'http://10.0.2.2:8000';
+  final path = raw.startsWith('/') ? raw : '/$raw';
+  return '$devHost$path';
+}
+
+// ─── Max photo file size ─────────────────────────────────────────────────────
+const int _maxPhotoBytes = 5 * 1024 * 1024; // 5 MB
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ProfileScreen
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// Displays the authenticated user's full profile.
 ///
@@ -21,9 +51,11 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _service = ProfileService();
+  final _picker = ImagePicker();
 
   UserModel? _user;
   bool _loading = true;
+  bool _photoUploading = false;
   String? _errorMessage;
 
   @override
@@ -76,6 +108,133 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // ── Photo edit bottom sheet ───────────────────────────────────────────────
+
+  /// Shows the bottom sheet with "Choose Photo" / "Remove Photo" / "Cancel".
+  void _showPhotoOptions() {
+    if (_photoUploading) return;
+    final hasPhoto =
+        _user?.profile?.profilePhotoUrl?.isNotEmpty ?? false;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PhotoOptionsSheet(
+        hasPhoto: hasPhoto,
+        onChoose: _pickAndUpload,
+        onRemove: _confirmRemove,
+      ),
+    );
+  }
+
+  /// Opens the gallery picker, validates, then uploads.
+  Future<void> _pickAndUpload() async {
+    Navigator.of(context).pop(); // close bottom sheet
+
+    // Pick from gallery only — no camera.
+    XFile? picked;
+    try {
+      picked = await _picker.pickImage(source: ImageSource.gallery);
+    } catch (_) {
+      // User denied permission or picker failed.
+      if (mounted) {
+        _showSnack('Could not open gallery. Please check app permissions.');
+      }
+      return;
+    }
+
+    if (picked == null) return; // User cancelled — do nothing.
+
+    // ── File size check ──────────────────────────────────────────────────────
+    final file = File(picked.path);
+    final fileSize = await file.length();
+    if (fileSize > _maxPhotoBytes) {
+      if (mounted) {
+        _showSnack('Please choose an image smaller than 5 MB.');
+      }
+      return;
+    }
+
+    // ── Upload ───────────────────────────────────────────────────────────────
+    setState(() => _photoUploading = true);
+    try {
+      final updated = await _service.uploadProfilePhoto(picked.path);
+      if (!mounted) return;
+      setState(() => _user = updated);
+      _showSnack('Profile photo updated!', isSuccess: true);
+    } on ValidationException catch (e) {
+      final msgs = (e.errors?.values.expand((v) => v).join('\n')) ?? e.message;
+      if (mounted) _showSnack(msgs);
+    } on NetworkException {
+      if (mounted) {
+        _showSnack(
+            'No internet connection. Please check your connection and retry.');
+      }
+    } on ServerException catch (e) {
+      if (mounted) _showSnack(e.message);
+    } on ApiException catch (e) {
+      if (mounted) _showSnack(e.message);
+    } finally {
+      if (mounted) setState(() => _photoUploading = false);
+    }
+  }
+
+  /// Asks for confirmation then calls DELETE /api/profile/photo.
+  Future<void> _confirmRemove() async {
+    Navigator.of(context).pop(); // close bottom sheet
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove profile photo?'),
+        content: const Text(
+            'Your profile photo will be removed. You can upload a new one anytime.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Remove',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _photoUploading = true);
+    try {
+      final updated = await _service.deleteProfilePhoto();
+      if (!mounted) return;
+      setState(() => _user = updated);
+      _showSnack('Profile photo removed.', isSuccess: true);
+    } on NetworkException {
+      if (mounted) {
+        _showSnack('No internet connection. Please retry.');
+      }
+    } on ApiException catch (e) {
+      if (mounted) _showSnack(e.message);
+    } finally {
+      if (mounted) setState(() => _photoUploading = false);
+    }
+  }
+
+  void _showSnack(String msg, {bool isSuccess = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isSuccess ? AppColors.success : AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -91,7 +250,124 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? const _LoadingBody()
           : _errorMessage != null
               ? _ErrorBody(message: _errorMessage!, onRetry: _load)
-              : _ProfileBody(user: _user!, onEdit: _openEdit),
+              : _ProfileBody(
+                  user: _user!,
+                  photoUploading: _photoUploading,
+                  onEdit: _openEdit,
+                  onPhotoEdit: _showPhotoOptions,
+                ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Photo options bottom sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PhotoOptionsSheet extends StatelessWidget {
+  const _PhotoOptionsSheet({
+    required this.hasPhoto,
+    required this.onChoose,
+    required this.onRemove,
+  });
+
+  final bool hasPhoto;
+  final VoidCallback onChoose;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.borderLight,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Profile Photo',
+            style: GoogleFonts.nunito(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimaryLight,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 1),
+          _SheetOption(
+            icon: Icons.photo_library_rounded,
+            label: 'Choose Photo',
+            onTap: onChoose,
+          ),
+          if (hasPhoto) ...[
+            const Divider(height: 1),
+            _SheetOption(
+              icon: Icons.delete_outline_rounded,
+              label: 'Remove Photo',
+              onTap: onRemove,
+              color: AppColors.error,
+            ),
+          ],
+          const Divider(height: 1),
+          _SheetOption(
+            icon: Icons.close_rounded,
+            label: 'Cancel',
+            onTap: () => Navigator.of(context).pop(),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetOption extends StatelessWidget {
+  const _SheetOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? AppColors.textPrimaryLight;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: c),
+            const SizedBox(width: 16),
+            Text(
+              label,
+              style: GoogleFonts.nunito(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: c,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -164,10 +440,17 @@ class _ErrorBody extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ProfileBody extends StatelessWidget {
-  const _ProfileBody({required this.user, required this.onEdit});
+  const _ProfileBody({
+    required this.user,
+    required this.photoUploading,
+    required this.onEdit,
+    required this.onPhotoEdit,
+  });
 
   final UserModel user;
+  final bool photoUploading;
   final VoidCallback onEdit;
+  final VoidCallback onPhotoEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +458,14 @@ class _ProfileBody extends StatelessWidget {
       physics: const BouncingScrollPhysics(),
       slivers: [
         // Header / hero
-        SliverToBoxAdapter(child: _ProfileHeader(user: user, onEdit: onEdit)),
+        SliverToBoxAdapter(
+          child: _ProfileHeader(
+            user: user,
+            photoUploading: photoUploading,
+            onEdit: onEdit,
+            onPhotoEdit: onPhotoEdit,
+          ),
+        ),
 
         // Profile completion bar
         if (user.profileCompletion < 100)
@@ -196,19 +486,27 @@ class _ProfileBody extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Header hero
+// Header hero  (photo avatar with edit overlay)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.user, required this.onEdit});
+  const _ProfileHeader({
+    required this.user,
+    required this.photoUploading,
+    required this.onEdit,
+    required this.onPhotoEdit,
+  });
 
   final UserModel user;
+  final bool photoUploading;
   final VoidCallback onEdit;
+  final VoidCallback onPhotoEdit;
 
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
     final initial = user.name.isNotEmpty ? user.name[0].toUpperCase() : '?';
+    final photoUrl = resolvePhotoUrl(user.profile?.profilePhotoUrl);
 
     return Container(
       padding: EdgeInsets.fromLTRB(20, topPad + 12, 20, 28),
@@ -269,38 +567,91 @@ class _ProfileHeader extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // Avatar
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: AppColors.primaryGradient,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.35),
-                width: 3,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.35),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
+          // Avatar with camera-edit overlay
+          GestureDetector(
+            onTap: onPhotoEdit,
+            child: Stack(
+              children: [
+                // ── Photo or initials ──────────────────────────────────────
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: photoUrl == null
+                        ? const LinearGradient(
+                            colors: AppColors.primaryGradient,
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.35),
+                      width: 3,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.35),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: photoUrl != null
+                        ? Image.network(
+                            photoUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (ctx, obj, err) => _InitialsAvatar(
+                              initial: initial,
+                            ),
+                          )
+                        : _InitialsAvatar(initial: initial),
+                  ),
                 ),
+
+                // ── Upload loading overlay ─────────────────────────────────
+                if (photoUploading)
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black.withValues(alpha: 0.45),
+                      ),
+                      child: const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // ── Camera badge ───────────────────────────────────────────
+                if (!photoUploading)
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt_rounded,
+                        size: 13,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
               ],
-            ),
-            child: Center(
-              child: Text(
-                initial,
-                style: const TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
             ),
           ),
 
@@ -354,6 +705,27 @@ class _ProfileHeader extends StatelessWidget {
         .whereType<String>()
         .toList();
     return parts.isEmpty ? null : parts.join(', ');
+  }
+}
+
+class _InitialsAvatar extends StatelessWidget {
+  const _InitialsAvatar({required this.initial});
+  final String initial;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.transparent,
+      alignment: Alignment.center,
+      child: Text(
+        initial,
+        style: const TextStyle(
+          fontSize: 36,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
+      ),
+    );
   }
 }
 
