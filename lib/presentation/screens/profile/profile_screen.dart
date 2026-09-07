@@ -111,7 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = e.message);
-    } catch (e, stack) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = 'An unexpected error occurred: ');
       debugPrint('Unexpected error in profile _load: \n');
@@ -206,6 +206,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final updated = await _service.uploadProfilePhoto(picked.path);
       if (!mounted) return;
+      
+      // Evict old image from cache if URL didn't change
+      final newUrl = resolvePhotoUrl(updated.profile?.profilePhotoUrl);
+      if (newUrl != null) {
+        await NetworkImage(newUrl).evict();
+      }
+      
       setState(() => _user = updated);
       _showSnack('Profile photo updated!', isSuccess: true);
     } on ValidationException catch (e) {

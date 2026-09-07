@@ -1,5 +1,7 @@
+// ignore_for_file: avoid_print
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -34,10 +36,12 @@ class ApiClient {
     final uri = _buildUri(path, queryParams: queryParams);
     final headers = await _buildHeaders();
     try {
+      _logRequest('GET', uri);
       final response = await _httpClient
           .get(uri, headers: headers)
           .timeout(ApiConstants.receiveTimeout);
-      return _handleResponse(response);
+      _logResponse(response.request?.method ?? '', response.request?.url ?? uri, response.statusCode, response.body);
+      return _handleResponse(response, response.request?.method ?? '', response.request?.url ?? uri);
     } on ApiException {
       rethrow;
     } on SocketException catch (e) {
@@ -53,10 +57,12 @@ class ApiClient {
     final uri = _buildUri(path);
     final headers = await _buildHeaders(withContentType: true);
     try {
+      _logRequest('POST', uri, body: body);
       final response = await _httpClient
           .post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
           .timeout(ApiConstants.receiveTimeout);
-      return _handleResponse(response);
+      _logResponse(response.request?.method ?? '', response.request?.url ?? uri, response.statusCode, response.body);
+      return _handleResponse(response, response.request?.method ?? '', response.request?.url ?? uri);
     } on ApiException {
       rethrow;
     } on SocketException catch (e) {
@@ -72,10 +78,12 @@ class ApiClient {
     final uri = _buildUri(path);
     final headers = await _buildHeaders(withContentType: true);
     try {
+      _logRequest('PUT', uri, body: body);
       final response = await _httpClient
           .put(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
           .timeout(ApiConstants.receiveTimeout);
-      return _handleResponse(response);
+      _logResponse(response.request?.method ?? '', response.request?.url ?? uri, response.statusCode, response.body);
+      return _handleResponse(response, response.request?.method ?? '', response.request?.url ?? uri);
     } on ApiException {
       rethrow;
     } on SocketException catch (e) {
@@ -91,10 +99,12 @@ class ApiClient {
     final uri = _buildUri(path);
     final headers = await _buildHeaders();
     try {
+      _logRequest('DELETE', uri);
       final response = await _httpClient
           .delete(uri, headers: headers)
           .timeout(ApiConstants.receiveTimeout);
-      return _handleResponse(response);
+      _logResponse(response.request?.method ?? '', response.request?.url ?? uri, response.statusCode, response.body);
+      return _handleResponse(response, response.request?.method ?? '', response.request?.url ?? uri);
     } on ApiException {
       rethrow;
     } on SocketException catch (e) {
@@ -138,12 +148,14 @@ class ApiClient {
       if (fields != null) request.fields.addAll(fields);
 
       // Attach the file.
+      _logRequest('POST_MULTIPART', uri, fields: fields);
       final mf = await http.MultipartFile.fromPath(fileField, filePath);
       request.files.add(mf);
 
       final streamed = await request.send().timeout(ApiConstants.receiveTimeout);
       final response = await http.Response.fromStream(streamed);
-      return _handleResponse(response);
+      _logResponse(response.request?.method ?? '', response.request?.url ?? uri, response.statusCode, response.body);
+      return _handleResponse(response, response.request?.method ?? '', response.request?.url ?? uri);
     } on ApiException {
       rethrow;
     } on SocketException catch (e) {
@@ -156,6 +168,48 @@ class ApiClient {
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────
+
+  void _logRequest(String method, Uri uri, {Map<String, dynamic>? body, Map<String, String>? fields}) {
+    if (!kDebugMode) return;
+    print('[API REQUEST]');
+    print(method);
+    print(uri.toString());
+    if (body != null) {
+      final safeBody = Map<String, dynamic>.from(body);
+      safeBody.remove('password');
+      safeBody.remove('password_confirmation');
+      print('REQUEST BODY:');
+      print(jsonEncode(safeBody));
+    }
+    if (fields != null) {
+      print('MULTIPART FIELDS: ');
+    }
+    print(''); // empty line
+  }
+
+  void _logResponse(String method, Uri uri, int status, String body) {
+    if (!kDebugMode) return;
+    print('[API RESPONSE]');
+    print(method);
+    print(uri.toString());
+    print('HTTP STATUS: ');
+    print('RESPONSE BODY:');
+    print(body);
+    print(''); // empty line
+  }
+
+  void _logError(String method, Uri uri, int? status, String message, String? body, Map<String, List<String>>? errors) {
+    if (!kDebugMode) return;
+    print('[API ERROR]');
+    print(method);
+    print(uri.toString());
+    if (status != null) print('HTTP STATUS: ');
+    print('message: ');
+    if (body != null) print('response body: ');
+    if (errors != null) print('parsed validation errors: ');
+    print(''); // empty line
+  }
+
 
   Uri _buildUri(String path, {Map<String, String>? queryParams}) {
     final fullUrl = '${ApiConstants.baseUrl}$path';
@@ -187,7 +241,7 @@ class ApiClient {
     return headers;
   }
 
-  ApiResponse _handleResponse(http.Response response) {
+  ApiResponse _handleResponse(http.Response response, String method, Uri uri) {
     final statusCode = response.statusCode;
 
     // 204 No Content – no body to decode.
@@ -225,23 +279,35 @@ class ApiClient {
 
     switch (statusCode) {
       case 400:
+        _logError(method, uri, statusCode, message, response.body, fieldErrors);
         throw BadRequestException(message, errors: fieldErrors);
       case 401:
+        _logError(method, uri, statusCode, message, response.body, null);
         throw UnauthorizedException(message);
       case 403:
+        _logError(method, uri, statusCode, message, response.body, null);
         throw ForbiddenException(message);
       case 404:
+        _logError(method, uri, statusCode, message, response.body, null);
         throw NotFoundException(message);
       case 409:
+        _logError(method, uri, statusCode, message, response.body, null);
         throw ConflictException(message);
       case 413:
+        _logError(method, uri, statusCode, 'File too large', response.body, null);
         throw ServerException('File too large. Please choose a smaller image.');
       case 422:
+        _logError(method, uri, statusCode, message, response.body, fieldErrors);
         throw ValidationException(message, errors: fieldErrors);
       case 429:
+        _logError(method, uri, statusCode, message, response.body, null);
         throw TooManyRequestsException(message);
       default:
-        if (statusCode >= 500) throw ServerException(message);
+        if (statusCode >= 500) {
+          _logError(method, uri, statusCode, message, response.body, null);
+          throw ServerException(message);
+        }
+        _logError(method, uri, statusCode, message, response.body, null);
         throw ApiException(message: message, statusCode: statusCode);
     }
   }

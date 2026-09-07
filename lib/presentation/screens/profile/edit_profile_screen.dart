@@ -120,11 +120,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      isScrollControlled: true,
       builder: (ctx) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                 child: Text(
@@ -160,7 +162,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 8),
             ],
           ),
-        );
+        ));
       },
     );
     if (picked != null && mounted) {
@@ -372,28 +374,34 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             // ── Travel style ─────────────────────────────────────────────────
             _FieldLabel('Travel Style'),
             const SizedBox(height: 6),
-            GestureDetector(
+            InkWell(
               onTap: _loading ? null : _pickTravelStyle,
-              child: AbsorbPointer(
-                child: TextFormField(
-                  readOnly: true,
-                  enabled: !_loading,
-                  style: GoogleFonts.nunito(fontSize: 14),
-                  // Display the human-readable label of the selected style.
-                  controller: TextEditingController(
-                    text: _travelStyle == null
-                        ? ''
-                        : (_travelStyles.firstWhere(
-                            (s) => s['value'] == _travelStyle,
-                            orElse: () => {'label': _travelStyle!},
-                          )['label'] ??
-                            _travelStyle!),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: _travelStyle == null ? AppColors.textSecondaryLight.withValues(alpha: 0.5) : AppColors.primary,
                   ),
-                  decoration: const InputDecoration(
-                    hintText: 'Select a travel style',
-                    suffixIcon: Icon(Icons.expand_more_rounded,
-                        color: AppColors.textSecondaryLight),
-                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _travelStyle == null
+                          ? 'Select a travel style'
+                          : (_travelStyles.firstWhere(
+                              (s) => s['value'] == _travelStyle,
+                              orElse: () => {'label': _travelStyle!},
+                            )['label'] ?? _travelStyle!),
+                      style: GoogleFonts.nunito(
+                        fontSize: 14,
+                        color: _travelStyle == null ? AppColors.textSecondaryLight : AppColors.textPrimaryLight,
+                      ),
+                    ),
+                    const Icon(Icons.expand_more_rounded, color: AppColors.textSecondaryLight),
+                  ],
                 ),
               ),
             ),
