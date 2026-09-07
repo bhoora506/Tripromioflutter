@@ -24,12 +24,29 @@ import '../../../routes/app_routes.dart';
 /// This function never throws; it returns null if [raw] is null/empty.
 String? resolvePhotoUrl(String? raw) {
   if (raw == null || raw.isEmpty) return null;
-  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  // DEBUG LOG AS REQUESTED
+  print('[DEBUG-resolvePhotoUrl] raw input: $raw');
+
+  String processed = raw;
+  if (processed.startsWith('http://localhost:')) {
+    processed = processed.replaceFirst('http://localhost:', 'http://10.0.2.2:');
+    print('[DEBUG-resolvePhotoUrl] converted localhost to 10.0.2.2: $processed');
+  } else if (processed.startsWith('http://127.0.0.1:')) {
+    processed = processed.replaceFirst('http://127.0.0.1:', 'http://10.0.2.2:');
+    print('[DEBUG-resolvePhotoUrl] converted 127.0.0.1 to 10.0.2.2: $processed');
+  }
+
+  if (processed.startsWith('http://') || processed.startsWith('https://')) {
+    print('[DEBUG-resolvePhotoUrl] final url: $processed');
+    return processed;
+  }
+  
   // Relative path — prepend the Laravel dev host.
-  // ApiConstants.baseUrl is 'http://10.0.2.2:8000/api' — strip the /api suffix.
   const devHost = 'http://10.0.2.2:8000';
-  final path = raw.startsWith('/') ? raw : '/$raw';
-  return '$devHost$path';
+  final path = processed.startsWith('/') ? processed : '/$processed';
+  final finalUrl = '$devHost$path';
+  print('[DEBUG-resolvePhotoUrl] final url (relative prepended): $finalUrl');
+  return finalUrl;
 }
 
 // ─── Max photo file size ─────────────────────────────────────────────────────

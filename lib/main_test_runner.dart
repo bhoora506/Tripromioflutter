@@ -5,6 +5,7 @@ import 'package:tripromio/data/services/profile_service.dart';
 import 'package:tripromio/core/storage/token_storage.dart';
 import 'package:tripromio/core/network/api_exception.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:tripromio/presentation/screens/profile/profile_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -136,7 +137,8 @@ class _TestRunnerScreenState extends State<TestRunnerScreen> {
       }
       
       final withPhoto = await profile.uploadProfilePhoto(imgPath);
-      _printLog('PASS: Photo uploaded -> ${withPhoto.profile?.profilePhotoUrl}');
+      final resolved = resolvePhotoUrl(withPhoto.profile?.profilePhotoUrl);
+      _printLog('PASS: Photo uploaded -> raw: ${withPhoto.profile?.profilePhotoUrl} | resolved: $resolved');
 
       final withoutPhoto = await profile.deleteProfilePhoto();
       _printLog('PASS: Photo deleted -> ${withoutPhoto.profile?.profilePhotoUrl == null}');

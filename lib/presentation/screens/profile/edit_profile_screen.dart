@@ -115,18 +115,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // ── Travel style picker ───────────────────────────────────────────────────
 
   Future<void> _pickTravelStyle() async {
+    print('[DEBUG-TravelStyle] bottom sheet opening...');
+    FocusScope.of(context).unfocus(); // dismiss keyboard
+
     final picked = await showModalBottomSheet<String>(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       isScrollControlled: true,
-      builder: (ctx) {
-        return SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+      useSafeArea: true,
+      builder: (BuildContext sheetCtx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(sheetCtx).viewInsets.bottom, // Handle keyboard padding just in case
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                 child: Text(
@@ -139,33 +145,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               const Divider(height: 1),
-              ..._travelStyles.map((s) {
-                final selected = s['value'] == _travelStyle;
-                return ListTile(
-                  title: Text(
-                    s['label']!,
-                    style: GoogleFonts.nunito(
-                      fontSize: 15,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected
-                          ? AppColors.primary
-                          : AppColors.textPrimaryLight,
-                    ),
-                  ),
-                  trailing: selected
-                      ? const Icon(Icons.check_rounded, color: AppColors.primary)
-                      : null,
-                  onTap: () => Navigator.of(ctx).pop(s['value']),
-                );
-              }),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _travelStyles.length,
+                  itemBuilder: (context, index) {
+                    final s = _travelStyles[index];
+                    final selected = s['value'] == _travelStyle;
+                    return ListTile(
+                      onTap: () {
+                        print('[DEBUG-TravelStyle] tapped ${s['value']}');
+                        Navigator.of(context).pop(s['value']);
+                      },
+                      title: Text(
+                        s['label']!,
+                        style: GoogleFonts.nunito(
+                          fontSize: 15,
+                          fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                          color: selected ? AppColors.primary : AppColors.textPrimaryLight,
+                        ),
+                      ),
+                      trailing: selected
+                          ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                          : null,
+                    );
+                  },
+                ),
+              ),
               const SizedBox(height: 8),
             ],
           ),
-        ));
+        );
       },
     );
+
+    print('[DEBUG-TravelStyle] bottom sheet closed, picked: ');
     if (picked != null && mounted) {
+      print('[DEBUG-TravelStyle] setState updating _travelStyle to: ');
       setState(() => _travelStyle = picked);
     }
   }
@@ -204,6 +220,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         preferredBudgetMin: minRaw,
         preferredBudgetMax: maxRaw,
       );
+      print('[DEBUG-TravelStyle] Saved successfully. API returned travel_style: ');
       if (!mounted) return;
       // Pop with updated model so ProfileScreen refreshes immediately
       Navigator.of(context).pop(updated);
