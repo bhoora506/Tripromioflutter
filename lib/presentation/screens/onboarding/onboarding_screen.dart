@@ -212,25 +212,13 @@ class _TopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          RichText(
-            text: TextSpan(children: [
-              TextSpan(
-                text: 'Trip',
-                style: GoogleFonts.nunito(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primary,
-                ),
-              ),
-              TextSpan(
-                text: 'romio',
-                style: GoogleFonts.nunito(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondaryLight,
-                ),
-              ),
-            ]),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/images/tripromio_logo.jpg',
+              height: 40,
+              fit: BoxFit.contain,
+            ),
           ),
           const Spacer(),
           if (!isLastPage)

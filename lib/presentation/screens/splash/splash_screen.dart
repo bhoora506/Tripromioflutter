@@ -339,7 +339,6 @@ class _OrbPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// The Tripromio wordmark composed of pure Flutter text widgets.
 class _BrandMark extends StatelessWidget {
   const _BrandMark();
 
@@ -348,57 +347,13 @@ class _BrandMark extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // ── Icon mark ─────────────────────────────────────────────────────
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: AppColors.primaryGradient,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.45),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.flight_takeoff_rounded,
-            color: Colors.white,
-            size: 36,
-          ),
-        ),
-
-        const SizedBox(height: 22),
-
-        // ── Wordmark ───────────────────────────────────────────────────────
-        RichText(
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: 'Trip',
-                style: GoogleFonts.nunito(
-                  fontSize: 38,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              TextSpan(
-                text: 'romio',
-                style: GoogleFonts.nunito(
-                  fontSize: 38,
-                  fontWeight: FontWeight.w300,
-                  color: Colors.white.withValues(alpha: 0.85),
-                  letterSpacing: -0.5,
-                ),
-              ),
-            ],
+        ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: Image.asset(
+            'assets/images/tripromio_logo.jpg',
+            width: 180,
+            height: 180,
+            fit: BoxFit.cover,
           ),
         ),
       ],
