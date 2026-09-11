@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/preferred_destination_model.dart';
 import '../../../data/services/profile_service.dart';
+import '../../../data/services/auth_service.dart';
 import '../../../routes/app_routes.dart';
 
 // ─── Photo URL helper ────────────────────────────────────────────────────────
@@ -69,11 +70,13 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _service = ProfileService();
+  final _authService = AuthService();
   final _picker = ImagePicker();
 
   UserModel? _user;
   bool _loading = true;
   bool _photoUploading = false;
+  bool _isLoggingOut = false;
   String? _errorMessage;
   List<PreferredDestinationModel>? _destinations;
   String? _destinationsError;
@@ -294,6 +297,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _confirmLogout() async {
+    if (_isLoggingOut) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text('Are you sure you want to log out of Tripromio?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text(
+              'Log out',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isLoggingOut = true);
+    
+    // AuthService.logout() calls API, catches errors, and guarantees token deletion.
+    await _authService.logout();
+
+    if (!mounted) return;
+    
+    // Clear navigation stack and go to Login.
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.login,
+      (route) => false,
+    );
+  }
+
   void _showSnack(String msg, {bool isSuccess = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -320,15 +363,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? const _LoadingBody()
           : _errorMessage != null
               ? _ErrorBody(message: _errorMessage!, onRetry: _load)
-              : _ProfileBody(
-                  user: _user!,
-                  photoUploading: _photoUploading,
-                  onEdit: _openEdit,
-                  onPhotoEdit: _showPhotoOptions,
-                  onEditInterests: _openEditInterests,
-                  onEditDestinations: _openDestinations,
-                  destinations: _destinations,
-                  destinationsError: _destinationsError,
+              : Stack(
+                  children: [
+                    _ProfileBody(
+                      user: _user!,
+                      photoUploading: _photoUploading,
+                      onEdit: _openEdit,
+                      onPhotoEdit: _showPhotoOptions,
+                      onEditInterests: _openEditInterests,
+                      onEditDestinations: _openDestinations,
+                      destinations: _destinations,
+                      destinationsError: _destinationsError,
+                      onLogout: _confirmLogout,
+                    ),
+                    if (_isLoggingOut)
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
     );
   }
@@ -521,6 +578,7 @@ class _ProfileBody extends StatelessWidget {
     required this.onPhotoEdit,
     required this.onEditInterests,
     required this.onEditDestinations,
+    required this.onLogout,
     required this.destinations,
     required this.destinationsError,
   });
@@ -531,6 +589,7 @@ class _ProfileBody extends StatelessWidget {
   final VoidCallback onPhotoEdit;
   final VoidCallback onEditInterests;
   final VoidCallback onEditDestinations;
+  final VoidCallback onLogout;
   final List<PreferredDestinationModel>? destinations;
   final String? destinationsError;
 
@@ -564,6 +623,7 @@ class _ProfileBody extends StatelessWidget {
           onEdit: onEditDestinations,
         )),
         SliverToBoxAdapter(child: _BudgetSection(user: user)),
+        SliverToBoxAdapter(child: _AccountSection(onLogout: onLogout)),
 
         // Bottom breathing room
         const SliverToBoxAdapter(child: SizedBox(height: 48)),
@@ -1222,6 +1282,85 @@ class _DestinationsSection extends StatelessWidget {
           children: destinations!.map((d) => _Tag(label: d.destination)).toList(),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account Settings Section (Logout)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AccountSection extends StatelessWidget {
+  const _AccountSection({required this.onLogout});
+
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Account',
+            style: GoogleFonts.nunito(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimaryLight,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.textPrimaryLight.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onLogout,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.logout_rounded,
+                            color: AppColors.error, size: 20),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        'Log out',
+                        style: GoogleFonts.nunito(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.error,
+                        ),
+                      ),
+                      const Spacer(),
+                      const Icon(Icons.chevron_right_rounded,
+                          color: AppColors.error, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
