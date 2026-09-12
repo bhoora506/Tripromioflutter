@@ -1,0 +1,18 @@
+Analyzing lib...                                                
+
+   info - Dangling library doc comment. Add a 'library' directive after the library comment - lib\data\models\user_model.dart:2:1 - dangling_library_doc_comments
+   info - The imported package 'path_provider' isn't a dependency of the importing package. Try adding a dependency for 'path_provider' in the 'pubspec.yaml' file - lib\main_test_runner.dart:7:8 - depend_on_referenced_packages
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\main_test_runner.dart:40:5 - avoid_print
+warning - The value of the local variable 'tokens' isn't used. Try removing the variable or using it - lib\main_test_runner.dart:50:11 - unused_local_variable
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\presentation\screens\profile\edit_profile_screen.dart:118:5 - avoid_print
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\presentation\screens\profile\edit_profile_screen.dart:157:25 - avoid_print
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\presentation\screens\profile\edit_profile_screen.dart:182:5 - avoid_print
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\presentation\screens\profile\edit_profile_screen.dart:184:7 - avoid_print
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\presentation\screens\profile\edit_profile_screen.dart:223:7 - avoid_print
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\presentation\screens\profile\profile_screen.dart:29:3 - avoid_print
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\presentation\screens\profile\profile_screen.dart:34:5 - avoid_print
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\presentation\screens\profile\profile_screen.dart:37:5 - avoid_print
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\presentation\screens\profile\profile_screen.dart:41:5 - avoid_print
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\presentation\screens\profile\profile_screen.dart:49:3 - avoid_print
+
+14 issues found. (ran in 8.0s)
