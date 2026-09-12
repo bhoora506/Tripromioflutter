@@ -3,106 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/models/trip_model.dart';
+import '../../../data/services/trip_service.dart';
 import '../../../routes/app_routes.dart';
+import '../../widgets/trip_card.dart';
 import 'find_companions_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mock data model
-// ─────────────────────────────────────────────────────────────────────────────
-
-class TravellerData {
-  const TravellerData({
-    required this.id,
-    required this.name,
-    required this.destination,
-    required this.dateRange,
-    required this.lookingFor,
-    required this.rating,
-    required this.tripsCount,
-    required this.avatarSeed,
-    required this.bio,
-  });
-
-  final String id;
-  final String name;
-  final String destination;
-  final String dateRange;
-  final String lookingFor;
-  final double rating;
-  final int tripsCount;
-  final int avatarSeed;
-  final String bio;
-}
-
-const _kMockTravellers = [
-  TravellerData(
-    id: 't-01',
-    name: 'Priya Sharma',
-    destination: 'Manali, Himachal Pradesh',
-    dateRange: '15 Sep – 22 Sep',
-    lookingFor: 'Solo traveller',
-    rating: 4.8,
-    tripsCount: 14,
-    avatarSeed: 0,
-    bio: 'Adventure lover and trek enthusiast. Looking for a co-traveller to explore the Rohtang Pass.',
-  ),
-  TravellerData(
-    id: 't-02',
-    name: 'Arjun Mehta',
-    destination: 'Manali, Himachal Pradesh',
-    dateRange: '18 Sep – 24 Sep',
-    lookingFor: 'Small group (3-5)',
-    rating: 4.5,
-    tripsCount: 8,
-    avatarSeed: 1,
-    bio: 'Backpacker by soul. Planning a 6-day trip covering Old Manali and Solang Valley.',
-  ),
-  TravellerData(
-    id: 't-03',
-    name: 'Kavya Nair',
-    destination: 'Manali, Himachal Pradesh',
-    dateRange: '20 Sep – 27 Sep',
-    lookingFor: 'Couple',
-    rating: 4.9,
-    tripsCount: 21,
-    avatarSeed: 2,
-    bio: 'Experienced traveller looking for like-minded companions for a week in the mountains.',
-  ),
-  TravellerData(
-    id: 't-04',
-    name: 'Rohan Verma',
-    destination: 'Manali, Himachal Pradesh',
-    dateRange: '14 Sep – 21 Sep',
-    lookingFor: 'Large group (6+)',
-    rating: 4.3,
-    tripsCount: 5,
-    avatarSeed: 3,
-    bio: 'First time in Manali! Planning a budget trip and would love company for local sightseeing.',
-  ),
-  TravellerData(
-    id: 't-05',
-    name: 'Ananya Gupta',
-    destination: 'Manali, Himachal Pradesh',
-    dateRange: '17 Sep – 23 Sep',
-    lookingFor: 'Solo traveller',
-    rating: 4.7,
-    tripsCount: 12,
-    avatarSeed: 4,
-    bio: 'Solo female traveller with 12 trips under the belt. Nature photographer looking for trekking partner.',
-  ),
-];
-
-const _kAvatarColors = [
-  [Color(0xFF5B6CF8), Color(0xFF9B7CF8)],
-  [Color(0xFFF85B6C), Color(0xFFF87C5B)],
-  [Color(0xFF5BF8A0), Color(0xFF5BDDF8)],
-  [Color(0xFFF8D45B), Color(0xFFF89F5B)],
-  [Color(0xFF5BB8F8), Color(0xFF5B6CF8)],
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SearchResultsScreen
+// SearchResultsScreen (Discover)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SearchResultsScreen extends StatefulWidget {
@@ -113,33 +23,173 @@ class SearchResultsScreen extends StatefulWidget {
 }
 
 class _SearchResultsScreenState extends State<SearchResultsScreen> {
-  bool _loadedMore = false;
+  final _tripService = TripService();
+  final _scrollController = ScrollController();
+
+  List<TripModel> _trips = [];
+  bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  int _currentPage = 1;
+  String? _errorMessage;
 
   SearchArgs? get _args {
     final args = ModalRoute.of(context)?.settings.arguments;
     return args is SearchArgs ? args : null;
   }
 
-  void _onConnect(TravellerData traveller) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Connection request sent to ${traveller.name}!',
-          style: GoogleFonts.nunito(fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(AppConstants.screenPaddingH),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
   }
 
-  void _onCardTap(TravellerData traveller) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_loading && _trips.isEmpty && _errorMessage == null) {
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _tripService.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_loadingMore || !_hasMore) return;
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMore();
+    }
+  }
+
+  String _dateToApi(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  void _parseBudget(String? budgetStr, void Function(double? min, double? max) cb) {
+    if (budgetStr == null) {
+      cb(null, null);
+      return;
+    }
+    if (budgetStr == 'Under Rs.500') { cb(null, 500); }
+    else if (budgetStr == 'Rs.500 - Rs.1,000') { cb(500, 1000); }
+    else if (budgetStr == 'Rs.1,000 - Rs.3,000') { cb(1000, 3000); }
+    else if (budgetStr == 'Rs.3,000 - Rs.8,000') { cb(3000, 8000); }
+    else if (budgetStr == 'Rs.8,000 - Rs.20,000') { cb(8000, 20000); }
+    else if (budgetStr == 'Rs.20,000+') { cb(20000, null); }
+    else { cb(null, null); }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+      _currentPage = 1;
+    });
+
+    try {
+      final args = _args;
+      String? startDate;
+      String? endDate;
+      if (args?.dateRange != null) {
+        startDate = _dateToApi(args!.dateRange!.start);
+        endDate = _dateToApi(args.dateRange!.end);
+      }
+      
+      double? bMin;
+      double? bMax;
+      _parseBudget(args?.budget, (min, max) {
+        bMin = min;
+        bMax = max;
+      });
+
+      final result = await _tripService.getTrips(
+        page: 1,
+        destination: args?.destination.isNotEmpty == true ? args?.destination : null,
+        startDate: startDate,
+        endDate: endDate,
+        budgetMin: bMin,
+        budgetMax: bMax,
+      );
+      
+      if (!mounted) return;
+      setState(() {
+        _trips = result.items;
+        _hasMore = result.pagination.currentPage < result.pagination.lastPage;
+        _loading = false;
+      });
+    } on NetworkException {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'No internet connection. Please retry.';
+        _loading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.message;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'An unexpected error occurred.';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+
+    try {
+      final nextPage = _currentPage + 1;
+      
+      final args = _args;
+      String? startDate;
+      String? endDate;
+      if (args?.dateRange != null) {
+        startDate = _dateToApi(args!.dateRange!.start);
+        endDate = _dateToApi(args.dateRange!.end);
+      }
+      
+      double? bMin;
+      double? bMax;
+      _parseBudget(args?.budget, (min, max) {
+        bMin = min;
+        bMax = max;
+      });
+
+      final result = await _tripService.getTrips(
+        page: nextPage,
+        destination: args?.destination.isNotEmpty == true ? args?.destination : null,
+        startDate: startDate,
+        endDate: endDate,
+        budgetMin: bMin,
+        budgetMax: bMax,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _trips.addAll(result.items);
+        _currentPage = nextPage;
+        _hasMore = result.pagination.currentPage < result.pagination.lastPage;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  void _onCardTap(TripModel trip) {
     Navigator.of(context).pushNamed(
       AppRoutes.tripDetail,
-      arguments: traveller,
+      arguments: trip.id,
     );
   }
 
@@ -151,7 +201,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
     ));
 
     final args = _args;
-    final destination = args?.destination ?? 'Companions';
+    final destination = args?.destination.isNotEmpty == true ? args!.destination : 'Discover';
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -159,58 +209,73 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
         children: [
           _SrHeader(destination: destination, args: args),
           Expanded(
-            child: _kMockTravellers.isEmpty
-                ? const _EmptyState()
-                : ListView(
-                    padding: EdgeInsets.fromLTRB(
-                      AppConstants.screenPaddingH,
-                      AppConstants.spacingMd,
-                      AppConstants.screenPaddingH,
-                      MediaQuery.paddingOf(context).bottom + AppConstants.spacingLg,
-                    ),
-                    children: [
-                      // Results count
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppConstants.spacingMd),
-                        child: Row(
-                          children: [
-                            Text(
-                              '${_kMockTravellers.length} travel companions found',
-                              style: GoogleFonts.nunito(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondaryLight,
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _errorMessage != null
+                    ? _ErrorView(message: _errorMessage!, onRetry: _load)
+                    : _trips.isEmpty
+                        ? const _EmptyState()
+                        : RefreshIndicator(
+                            color: AppColors.primary,
+                            onRefresh: _load,
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              padding: EdgeInsets.fromLTRB(
+                                AppConstants.screenPaddingH,
+                                AppConstants.spacingMd,
+                                AppConstants.screenPaddingH,
+                                MediaQuery.paddingOf(context).bottom + AppConstants.spacingLg,
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
+                              itemCount: _trips.length + (_loadingMore ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (index == 0 && index == _trips.length) {
+                                  // Handled by _trips.isEmpty above
+                                  return const SizedBox();
+                                }
+                                
+                                if (index == _trips.length) {
+                                  return const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 16),
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                    ),
+                                  );
+                                }
 
-                      // Cards
-                      ..._kMockTravellers.map((t) => _TravellerCard(
-                            traveller: t,
-                            onConnect: () => _onConnect(t),
-                            onTap: () => _onCardTap(t),
-                          )),
+                                if (index == 0) {
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: AppConstants.spacingMd),
+                                        child: Text(
+                                          '${_trips.length}${_hasMore ? '+' : ''} trips found',
+                                          style: GoogleFonts.nunito(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textSecondaryLight,
+                                          ),
+                                        ),
+                                      ),
+                                      TripCard(
+                                        data: TripCardData.fromTripModel(_trips[index]),
+                                        onTap: () => _onCardTap(_trips[index]),
+                                      ),
+                                    ],
+                                  );
+                                }
 
-                      // Load more
-                      const SizedBox(height: AppConstants.spacingMd),
-                      if (!_loadedMore)
-                        _LoadMoreBtn(
-                          onTap: () => setState(() => _loadedMore = true),
-                        )
-                      else
-                        Center(
-                          child: Text(
-                            "You've seen all results",
-                            style: GoogleFonts.nunito(
-                              fontSize: 13,
-                              color: AppColors.textSecondaryLight,
+                                return TripCard(
+                                  data: TripCardData.fromTripModel(_trips[index]),
+                                  onTap: () => _onCardTap(_trips[index]),
+                                );
+                              },
                             ),
                           ),
-                        ),
-                    ],
-                  ),
           ),
         ],
       ),
@@ -300,13 +365,24 @@ class _SrHeader extends StatelessWidget {
           const SizedBox(height: 6),
 
           // Chips row
-          Row(children: [
-            _InfoChip(icon: Icons.calendar_today_rounded, label: dateStr),
-            const SizedBox(width: AppConstants.spacingSm),
-            _InfoChip(
-                icon: Icons.people_outline_rounded,
-                label: args?.lookingFor ?? 'Any'),
-          ]),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              _InfoChip(icon: Icons.calendar_today_rounded, label: dateStr),
+              if (args?.lookingFor != null) ...[
+                const SizedBox(width: AppConstants.spacingSm),
+                _InfoChip(
+                    icon: Icons.people_outline_rounded,
+                    label: args!.lookingFor!),
+              ],
+              if (args?.budget != null) ...[
+                const SizedBox(width: AppConstants.spacingSm),
+                _InfoChip(
+                    icon: Icons.account_balance_wallet_outlined,
+                    label: args!.budget!),
+              ]
+            ]),
+          ),
         ],
       ),
     );
@@ -339,226 +415,6 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-// ── Traveller Card ────────────────────────────────────────────────────────────
-
-class _TravellerCard extends StatelessWidget {
-  const _TravellerCard({
-    required this.traveller,
-    required this.onConnect,
-    required this.onTap,
-  });
-
-  final TravellerData traveller;
-  final VoidCallback onConnect;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final idx = traveller.avatarSeed % _kAvatarColors.length;
-    final colors = _kAvatarColors[idx];
-    final initials = traveller.name
-        .split(' ')
-        .map((w) => w.isNotEmpty ? w[0] : '')
-        .take(2)
-        .join();
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppConstants.spacingMd),
-        padding: const EdgeInsets.all(AppConstants.spacingMd),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceLight,
-          borderRadius: BorderRadius.circular(AppConstants.radiusLg),
-          border: Border.all(color: AppColors.borderLight),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 12,
-                offset: const Offset(0, 3))
-          ],
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Top row: avatar + name + rating
-          Row(children: [
-            // Avatar
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                    colors: colors,
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight),
-              ),
-              child: Center(
-                child: Text(initials,
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white)),
-              ),
-            ),
-            const SizedBox(width: AppConstants.spacingMd),
-
-            // Name + destination
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(traveller.name,
-                    style: GoogleFonts.nunito(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimaryLight)),
-                const SizedBox(height: 2),
-                Row(children: [
-                  const Icon(Icons.location_on_rounded,
-                      size: 13, color: AppColors.textSecondaryLight),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    child: Text(
-                      traveller.destination,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.nunito(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textSecondaryLight),
-                    ),
-                  ),
-                ]),
-              ]),
-            ),
-
-            // Rating
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Row(children: [
-                const Icon(Icons.star_rounded, size: 14, color: Color(0xFFFFB800)),
-                const SizedBox(width: 3),
-                Text('${traveller.rating}',
-                    style: GoogleFonts.nunito(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimaryLight)),
-              ]),
-              const SizedBox(height: 2),
-              Text('${traveller.tripsCount} trips',
-                  style: GoogleFonts.nunito(
-                      fontSize: 11,
-                      color: AppColors.textSecondaryLight,
-                      fontWeight: FontWeight.w500)),
-            ]),
-          ]),
-
-          const SizedBox(height: AppConstants.spacingSm),
-
-          // Bio
-          Text(
-            traveller.bio,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.nunito(
-                fontSize: 13,
-                color: AppColors.textSecondaryLight,
-                fontWeight: FontWeight.w400,
-                height: 1.45),
-          ),
-
-          const SizedBox(height: AppConstants.spacingSm),
-
-          // Tags + date row
-          Row(children: [
-            _MiniChip(
-                icon: Icons.calendar_today_rounded,
-                label: traveller.dateRange),
-            const SizedBox(width: AppConstants.spacingXs),
-            _MiniChip(
-                icon: Icons.people_outline_rounded,
-                label: traveller.lookingFor),
-          ]),
-
-          const SizedBox(height: AppConstants.spacingMd),
-
-          // Connect button
-          SizedBox(
-            width: double.infinity,
-            height: 42,
-            child: ElevatedButton(
-              onPressed: onConnect,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusMd)),
-                textStyle: GoogleFonts.nunito(
-                    fontSize: 14, fontWeight: FontWeight.w700),
-              ),
-              child: const Text('Connect'),
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-class _MiniChip extends StatelessWidget {
-  const _MiniChip({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.backgroundLight,
-        borderRadius: BorderRadius.circular(AppConstants.radiusFull),
-        border: Border.all(color: AppColors.borderLight),
-      ),
-      child: Row(children: [
-        Icon(icon, size: 11, color: AppColors.primary),
-        const SizedBox(width: 4),
-        Text(label,
-            style: GoogleFonts.nunito(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimaryLight)),
-      ]),
-    );
-  }
-}
-
-// ── Load More ─────────────────────────────────────────────────────────────────
-
-class _LoadMoreBtn extends StatelessWidget {
-  const _LoadMoreBtn({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 46,
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
-          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.refresh_rounded, color: AppColors.primary, size: 18),
-          const SizedBox(width: AppConstants.spacingXs),
-          Text('Load More',
-              style: GoogleFonts.nunito(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary)),
-        ]),
-      ),
-    );
-  }
-}
-
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
@@ -576,20 +432,59 @@ class _EmptyState extends StatelessWidget {
             shape: BoxShape.circle,
             border: Border.all(color: AppColors.borderLight, width: 2),
           ),
-          child: const Icon(Icons.people_outline_rounded,
+          child: const Icon(Icons.flight_takeoff_rounded,
               size: 40, color: AppColors.textSecondaryLight),
         ),
         const SizedBox(height: AppConstants.spacingMd),
-        Text('No companions found',
+        Text('No trips found',
             style: GoogleFonts.nunito(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimaryLight)),
         const SizedBox(height: 6),
-        Text('Try adjusting your filters',
+        Text('Try adjusting your search filters',
             style: GoogleFonts.nunito(
                 fontSize: 14, color: AppColors.textSecondaryLight)),
       ]),
+    );
+  }
+}
+
+// ── Error state ───────────────────────────────────────────────────────────────
+
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded,
+                size: 56, color: AppColors.textSecondaryLight),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.nunito(
+                fontSize: 15,
+                color: AppColors.textSecondaryLight,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

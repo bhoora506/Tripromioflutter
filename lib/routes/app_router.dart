@@ -14,6 +14,9 @@ import '../presentation/screens/profile/edit_interests_screen.dart';
 import '../presentation/screens/profile/preferred_destinations_screen.dart';
 import '../data/models/interest_model.dart';
 import '../presentation/screens/splash/splash_screen.dart';
+import '../presentation/screens/trips/create_trip_screen.dart';
+import '../presentation/screens/trips/edit_trip_screen.dart';
+import '../presentation/screens/trips/my_trips_screen.dart';
 import '../presentation/screens/trips/trip_details_screen.dart';
 
 /// Central route generator for the application.
@@ -42,9 +45,10 @@ abstract final class AppRouter {
         currentInterests: settings.arguments as List<InterestModel>? ?? [],
       ),
 
-      // ── Trips (placeholder until later phase) ────────────────────────
-      AppRoutes.trips => const PlaceholderScreen(label: 'Trips'),
-      AppRoutes.createTrip => const PlaceholderScreen(label: 'Create Trip'),
+      // ── Trips ────────────────────────────────────────────────────────────────
+      AppRoutes.trips => const MyTripsScreen(),
+      AppRoutes.createTrip => const CreateTripScreen(),
+      AppRoutes.editTrip => const EditTripScreen(),
 
       // ── Phase 5 — Companion Flow ───────────────────────────────────────────
       // /find-companions → FindCompanionsScreen (form)

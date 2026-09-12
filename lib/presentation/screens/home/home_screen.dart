@@ -7,52 +7,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../../routes/app_routes.dart';
 import '../../widgets/trip_card.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock data — replace with API data in a later phase
-// ─────────────────────────────────────────────────────────────────────────────
+import '../../../data/models/trip_model.dart';
+import '../../../data/services/trip_service.dart';
 
-const _kMockTrips = [
-  TripCardData(
-    id: 'trip-001',
-    title: 'Nahargarh Fort, Jaipur',
-    location: 'Jaipur, Rajasthan',
-    dateRange: '20 Aug – 25 Aug',
-    companionCount: 3,
-    budget: '₹900–₹1500',
-    illustrationSeed: 0,
-    tag: 'Fort',
-  ),
-  TripCardData(
-    id: 'trip-002',
-    title: 'Amer Fort Trail',
-    location: 'Amer, Rajasthan',
-    dateRange: '21 Aug – 4:00 PM',
-    companionCount: 2,
-    budget: '₹500–₹800',
-    illustrationSeed: 1,
-    tag: 'Heritage',
-  ),
-  TripCardData(
-    id: 'trip-003',
-    title: 'Valley of Flowers',
-    location: 'Uttarakhand',
-    dateRange: '1 Sep – 8 Sep',
-    companionCount: 5,
-    budget: '₹3000–₹5000',
-    illustrationSeed: 2,
-    tag: 'Trek',
-  ),
-  TripCardData(
-    id: 'trip-004',
-    title: 'Pangong Lake Camp',
-    location: 'Ladakh',
-    dateRange: '15 Sep – 22 Sep',
-    companionCount: 4,
-    budget: '₹8000–₹12000',
-    illustrationSeed: 4,
-    tag: 'Adventure',
-  ),
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// Home screen + navigation shell
+// ─────────────────────────────────────────────────────────────────────────────
 
 const _kTopDestinations = [
   _Destination(name: 'Manali', icon: Icons.ac_unit_rounded, seed: 0),
@@ -75,16 +35,6 @@ class _Destination {
   final int seed;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HomeScreen — root widget (manages bottom-nav state)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// The main shell screen for Tripromio, containing a custom bottom navigation
-/// bar and the selected tab's body.
-///
-/// Only the "Home" tab is fully built in this phase. The other tabs show
-/// the existing [PlaceholderScreen]. Routing / real tab bodies will be wired
-/// in later phases.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -290,97 +240,189 @@ class _BottomNavBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Home body — scrollable content
+// Home body — scrollable content (real API)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _HomeBody extends StatelessWidget {
+class _HomeBody extends StatefulWidget {
   const _HomeBody();
 
   @override
+  State<_HomeBody> createState() => _HomeBodyState();
+}
+
+class _HomeBodyState extends State<_HomeBody> {
+  final _tripService = TripService();
+  List<TripModel> _trips = [];
+  bool _loading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrips();
+  }
+
+  @override
+  void dispose() {
+    _tripService.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTrips() async {
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // By default, getTrips() returns published trips
+      final result = await _tripService.getTrips(perPage: 5);
+      if (!mounted) return;
+      setState(() {
+        _trips = result.items;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Failed to load popular trips.';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        // Safe-area top spacing + header
-        SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with gradient background
-              const _HomeHeader(),
-              const SizedBox(height: AppConstants.spacingMd),
-              // Search bar
-              const Padding(
-                padding: EdgeInsets.symmetric(
-                    horizontal: AppConstants.screenPaddingH),
-                child: _SearchBar(),
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: _loadTrips,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        slivers: [
+          // Safe-area top spacing + header
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with gradient background
+                const _HomeHeader(),
+                const SizedBox(height: AppConstants.spacingMd),
+                // Search bar
+                const Padding(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: AppConstants.screenPaddingH),
+                  child: _SearchBar(),
+                ),
+                const SizedBox(height: AppConstants.spacingXl),
+              ],
+            ),
+          ),
+
+          // Popular Trips section
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.screenPaddingH),
+              child: _SectionHeader(
+                title: 'Popular Trips Near You',
+                onViewAll: () => Navigator.of(context).pushNamed(AppRoutes.discover),
               ),
-              const SizedBox(height: AppConstants.spacingXl),
-            ],
-          ),
-        ),
-
-        // Popular Trips section
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.screenPaddingH),
-            child: _SectionHeader(
-              title: 'Popular Trips Near You',
-              onViewAll: () {},
             ),
           ),
-        ),
 
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
+          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
 
-        // Trip cards
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppConstants.screenPaddingH),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (_, i) => TripCard(data: _kMockTrips[i]),
-              childCount: _kMockTrips.length,
+          // Trip cards
+          if (_loading)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            )
+          else if (_errorMessage != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: Text(
+                    _errorMessage!,
+                    style: GoogleFonts.nunito(color: AppColors.textSecondaryLight),
+                  ),
+                ),
+              ),
+            )
+          else if (_trips.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Text(
+                    'No popular trips found.',
+                    style: GoogleFonts.nunito(color: AppColors.textSecondaryLight),
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.screenPaddingH),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) {
+                    final trip = _trips[i];
+                    return TripCard(
+                      data: TripCardData.fromTripModel(trip),
+                      onTap: () {
+                        Navigator.of(context).pushNamed(
+                          AppRoutes.tripDetail,
+                          arguments: trip.id,
+                        );
+                      },
+                    );
+                  },
+                  childCount: _trips.length,
+                ),
+              ),
+            ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingXl)),
+
+          // Top Destinations section
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.screenPaddingH),
+              child: _SectionHeader(
+                title: 'Top Destinations',
+                onViewAll: () {},
+              ),
             ),
           ),
-        ),
 
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingXl)),
+          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
 
-        // Top Destinations section
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.screenPaddingH),
-            child: _SectionHeader(
-              title: 'Top Destinations',
-              onViewAll: () {},
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 110,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(
+                    left: AppConstants.screenPaddingH,
+                    right: AppConstants.spacingSm),
+                physics: const BouncingScrollPhysics(),
+                itemCount: _kTopDestinations.length,
+                itemBuilder: (_, i) =>
+                    _DestinationChip(dest: _kTopDestinations[i]),
+              ),
             ),
           ),
-        ),
 
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
-
-        SliverToBoxAdapter(
-          child: SizedBox(
-            height: 110,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(
-                  left: AppConstants.screenPaddingH,
-                  right: AppConstants.spacingSm),
-              physics: const BouncingScrollPhysics(),
-              itemCount: _kTopDestinations.length,
-              itemBuilder: (_, i) =>
-                  _DestinationChip(dest: _kTopDestinations[i]),
-            ),
-          ),
-        ),
-
-        // Bottom breathing room above nav bar
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingXxl)),
-      ],
+          // Bottom breathing room above nav bar
+          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingXxl)),
+        ],
+      ),
     );
   }
 }

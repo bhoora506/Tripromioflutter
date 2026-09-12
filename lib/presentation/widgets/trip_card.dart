@@ -5,15 +5,16 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
+import '../../data/models/trip_model.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Model — replace with real API model later
+// Model
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Lightweight data class for a single trip card.
+/// Lightweight display-data class for a single trip card.
 ///
-/// When the backend integration phase begins, map the API response
-/// directly to this class (or replace it with the actual model).
+/// Use [TripCardData.fromTripModel] to convert a real [TripModel] into
+/// this display format while preserving the original [tripId] for navigation.
 class TripCardData {
   const TripCardData({
     required this.id,
@@ -24,10 +25,14 @@ class TripCardData {
     required this.budget,
     required this.illustrationSeed,
     required this.tag,
+    this.tripId,
   });
 
-  /// Unique identifier (used as Hero tag etc. when navigating).
+  /// String identifier (used as Hero tag etc.).
   final String id;
+
+  /// The real backend trip ID, preserved for navigation.
+  final int? tripId;
 
   /// Trip / destination name — e.g. "Nahargarh Fort, Jaipur".
   final String title;
@@ -49,6 +54,87 @@ class TripCardData {
 
   /// Short category label — e.g. "Fort", "Beach", "Hill Station".
   final String tag;
+
+  /// Create card display data from a real [TripModel].
+  factory TripCardData.fromTripModel(TripModel trip) {
+    // Format date range
+    String dateRange = '';
+    if (trip.startDate != null && trip.endDate != null) {
+      dateRange = '${_formatDate(trip.startDate!)} – ${_formatDate(trip.endDate!)}';
+    } else if (trip.startDate != null) {
+      dateRange = _formatDate(trip.startDate!);
+    }
+
+    // Format budget
+    String budget = '';
+    if (trip.budgetMin != null && trip.budgetMax != null) {
+      budget = '₹${_fmtNum(trip.budgetMin!)} – ₹${_fmtNum(trip.budgetMax!)}';
+    } else if (trip.budgetMin != null) {
+      budget = 'From ₹${_fmtNum(trip.budgetMin!)}';
+    } else if (trip.budgetMax != null) {
+      budget = 'Up to ₹${_fmtNum(trip.budgetMax!)}';
+    }
+
+    // Trip type label
+    final tag = trip.tripType != null ? _tripTypeLabel(trip.tripType!) : 'Trip';
+
+    return TripCardData(
+      id: 'trip-${trip.id}',
+      tripId: trip.id,
+      title: trip.title,
+      location: trip.destination,
+      dateRange: dateRange,
+      companionCount: trip.memberCount,
+      budget: budget,
+      illustrationSeed: trip.id,
+      tag: tag,
+    );
+  }
+
+  static String _formatDate(String dateStr) {
+    const months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    try {
+      final parts = dateStr.split('-');
+      final month = int.parse(parts[1]);
+      final day = int.parse(parts[2]);
+      return '$day ${months[month]}';
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  static String _fmtNum(double n) {
+    if (n == n.truncateToDouble()) return n.toInt().toString();
+    return n.toStringAsFixed(0);
+  }
+
+  static String _tripTypeLabel(TripType type) {
+    switch (type) {
+      case TripType.weekend:
+        return 'Weekend';
+      case TripType.adventure:
+        return 'Adventure';
+      case TripType.backpacking:
+        return 'Backpacking';
+      case TripType.roadTrip:
+        return 'Road Trip';
+      case TripType.nature:
+        return 'Nature';
+      case TripType.photography:
+        return 'Photography';
+      case TripType.cultural:
+        return 'Cultural';
+      case TripType.beach:
+        return 'Beach';
+      case TripType.mountains:
+        return 'Mountains';
+      case TripType.other:
+        return 'Other';
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ abstract final class AppRoutes {
   static const String trips = '/trips';
   static const String tripDetail = '/trips/:tripId';
   static const String createTrip = '/trips/create';
+  static const String editTrip = '/trips/edit';
 
   // ── Matching / Companions ──────────────────────────────────────────────────────
   static const String findCompanions = '/find-companions';
