@@ -6,7 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/models/interest_model.dart';
 import '../../../data/models/trip_model.dart';
+import '../../../data/services/profile_service.dart';
 import '../../../data/services/trip_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +42,9 @@ class _EditTripScreenState extends State<EditTripScreen> {
   DateTime? _endDate;
   TripType? _selectedTripType;
   int _maxMembers = 4;
+  List<InterestModel> _allInterests = [];
+  final Set<int> _selectedInterestIds = {};
+  bool _loadingInterests = true;
   bool _submitting = false;
   bool _initialized = false;
 
@@ -63,8 +68,23 @@ class _EditTripScreenState extends State<EditTripScreen> {
       if (args is TripModel) {
         _trip = args;
         _populateFields(args);
+        _loadInterests();
         _initialized = true;
       }
+    }
+  }
+
+  Future<void> _loadInterests() async {
+    try {
+      final interests = await ProfileService().getInterests();
+      if (!mounted) return;
+      setState(() {
+        _allInterests = interests;
+        _loadingInterests = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingInterests = false);
     }
   }
 
@@ -84,6 +104,10 @@ class _EditTripScreenState extends State<EditTripScreen> {
     }
     if (trip.endDate != null) {
       _endDate = DateTime.tryParse(trip.endDate!);
+    }
+    _selectedInterestIds.clear();
+    for (final interest in trip.interests) {
+      _selectedInterestIds.add(interest.id);
     }
   }
 
@@ -210,6 +234,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
       int? newMaxMembers;
       double? newBudgetMin;
       double? newBudgetMax;
+      List<int>? newInterestIds;
 
       if (_fullEdit) {
         newDest = _destinationCtrl.text.trim() != _trip!.destination
@@ -238,6 +263,12 @@ class _EditTripScreenState extends State<EditTripScreen> {
           final val = double.tryParse(maxStr);
           if (val != null && val != _trip!.budgetMax) newBudgetMax = val;
         }
+
+        final oldInterestIds = _trip!.interests.map((e) => e.id).toSet();
+        if (_selectedInterestIds.length != oldInterestIds.length ||
+            !_selectedInterestIds.containsAll(oldInterestIds)) {
+          newInterestIds = _selectedInterestIds.toList();
+        }
       }
 
       // Check if anything changed
@@ -249,7 +280,8 @@ class _EditTripScreenState extends State<EditTripScreen> {
           newTripType == null &&
           newMaxMembers == null &&
           newBudgetMin == null &&
-          newBudgetMax == null) {
+          newBudgetMax == null &&
+          newInterestIds == null) {
         _showSnack('No changes to save.');
         if (mounted) setState(() => _submitting = false);
         return;
@@ -266,6 +298,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
         description: newDesc,
         budgetMin: newBudgetMin,
         budgetMax: newBudgetMax,
+        interestIds: newInterestIds,
       );
       if (!mounted) return;
       _showSnack('Trip updated!', isSuccess: true);
@@ -586,6 +619,75 @@ class _EditTripScreenState extends State<EditTripScreen> {
                     hint: 'Describe your trip...',
                     maxLines: 4,
                   ),
+
+                  if (_fullEdit) ...[
+                    const SizedBox(height: AppConstants.spacingMd),
+
+                    // Interests
+                    _EditLabel('Interests (max 10)'),
+                    const SizedBox(height: AppConstants.spacingXs),
+                    if (_loadingInterests)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      )
+                    else
+                      Wrap(
+                        spacing: AppConstants.spacingSm,
+                        runSpacing: AppConstants.spacingSm,
+                        children: _allInterests.map((interest) {
+                          final selected =
+                              _selectedInterestIds.contains(interest.id);
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                if (selected) {
+                                  _selectedInterestIds.remove(interest.id);
+                                } else if (_selectedInterestIds.length < 10) {
+                                  _selectedInterestIds.add(interest.id);
+                                } else {
+                                  _showSnack('Maximum 10 interests allowed.');
+                                }
+                              });
+                            },
+                            child: AnimatedContainer(
+                              duration: AppConstants.animationFast,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? AppColors.primary.withValues(alpha: 0.12)
+                                    : AppColors.surfaceLight,
+                                borderRadius:
+                                    BorderRadius.circular(AppConstants.radiusFull),
+                                border: Border.all(
+                                  color: selected
+                                      ? AppColors.primary
+                                      : AppColors.borderLight,
+                                ),
+                              ),
+                              child: Text(
+                                interest.name,
+                                style: GoogleFonts.nunito(
+                                  fontSize: 13,
+                                  fontWeight:
+                                      selected ? FontWeight.w700 : FontWeight.w500,
+                                  color: selected
+                                      ? AppColors.primary
+                                      : AppColors.textPrimaryLight,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                  ],
 
                   const SizedBox(height: AppConstants.spacingXl),
 
