@@ -30,6 +30,7 @@ class EditTripScreen extends StatefulWidget {
 
 class _EditTripScreenState extends State<EditTripScreen> {
   final _tripService = TripService();
+  final _profileService = ProfileService();
 
   final _titleCtrl = TextEditingController();
   final _destinationCtrl = TextEditingController();
@@ -76,7 +77,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
 
   Future<void> _loadInterests() async {
     try {
-      final interests = await ProfileService().getInterests();
+      final interests = await _profileService.getInterests();
       if (!mounted) return;
       setState(() {
         _allInterests = interests;
@@ -119,6 +120,7 @@ class _EditTripScreenState extends State<EditTripScreen> {
     _budgetMinCtrl.dispose();
     _budgetMaxCtrl.dispose();
     _tripService.dispose();
+    _profileService.dispose();
     super.dispose();
   }
 
@@ -209,13 +211,26 @@ class _EditTripScreenState extends State<EditTripScreen> {
   Future<void> _submit() async {
     if (_submitting || _trip == null) return;
 
-    // Basic validation
+    // Basic validation — mirrors backend rules
     if (_titleCtrl.text.trim().length < 3) {
       _showSnack('Title must be at least 3 characters.');
       return;
     }
+    if (_titleCtrl.text.trim().length > 200) {
+      _showSnack('Title must be 200 characters or fewer.');
+      return;
+    }
     if (_fullEdit && _destinationCtrl.text.trim().isEmpty) {
       _showSnack('Destination is required.');
+      return;
+    }
+    if (_fullEdit && _destinationCtrl.text.trim().length > 200) {
+      _showSnack('Destination must be 200 characters or fewer.');
+      return;
+    }
+    final desc = _descriptionCtrl.text.trim();
+    if (desc.length > 5000) {
+      _showSnack('Description must be 5000 characters or fewer.');
       return;
     }
 
@@ -343,6 +358,15 @@ class _EditTripScreenState extends State<EditTripScreen> {
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
     ));
+
+    // Show a loading/uninitialised state on the very first frame before
+    // didChangeDependencies has had a chance to populate _trip.
+    if (!_initialized) {
+      return const Scaffold(
+        backgroundColor: AppColors.backgroundLight,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     // Route guard: no TripModel passed or terminal status
     if (_trip == null || _notEditable) {

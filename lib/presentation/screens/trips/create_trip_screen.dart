@@ -156,11 +156,20 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   String? _validateForm() {
-    if (_titleCtrl.text.trim().length < 3) return 'Title must be at least 3 characters.';
-    if (_destinationCtrl.text.trim().isEmpty) return 'Destination is required.';
+    final title = _titleCtrl.text.trim();
+    if (title.length < 3) return 'Title must be at least 3 characters.';
+    if (title.length > 200) return 'Title must be 200 characters or fewer.';
+
+    final destination = _destinationCtrl.text.trim();
+    if (destination.isEmpty) return 'Destination is required.';
+    if (destination.length > 200) return 'Destination must be 200 characters or fewer.';
+
     if (_startDate == null) return 'Start date is required.';
     if (_endDate == null) return 'End date is required.';
     if (_selectedTripType == null) return 'Trip type is required.';
+
+    final description = _descriptionCtrl.text.trim();
+    if (description.length > 5000) return 'Description must be 5000 characters or fewer.';
 
     final minStr = _budgetMinCtrl.text.trim();
     final maxStr = _budgetMaxCtrl.text.trim();

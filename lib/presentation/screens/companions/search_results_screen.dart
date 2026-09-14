@@ -228,11 +228,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                               ),
                               itemCount: _trips.length + (_loadingMore ? 1 : 0),
                               itemBuilder: (context, index) {
-                                if (index == 0 && index == _trips.length) {
-                                  // Handled by _trips.isEmpty above
-                                  return const SizedBox();
-                                }
-                                
                                 if (index == _trips.length) {
                                   return const Padding(
                                     padding: EdgeInsets.symmetric(vertical: 16),
