@@ -140,6 +140,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
+      isScrollControlled: true,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppConstants.radiusXl)),
       ),
@@ -830,23 +832,32 @@ class _TripTypeSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, AppConstants.spacingMd, 0, AppConstants.spacingLg),
+    // Cap the sheet height to 70% of the screen so it never overflows on small
+    // devices while still being navigable on large ones.
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.70;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.borderLight,
-                borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+          // ── Drag handle
+          Padding(
+            padding: const EdgeInsets.only(top: AppConstants.spacingMd),
+            child: Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderLight,
+                  borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+                ),
               ),
             ),
           ),
           const SizedBox(height: AppConstants.spacingMd),
+          // ── Title
           Padding(
             padding: const EdgeInsets.symmetric(
                 horizontal: AppConstants.screenPaddingH),
@@ -860,39 +871,56 @@ class _TripTypeSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppConstants.spacingSm),
-          ...TripType.values.map((type) {
-            final sel = type == selected;
-            return InkWell(
-              onTap: () => onSelect(type),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.screenPaddingH, vertical: 13),
-                child: Row(
-                  children: [
-                    Icon(
-                      _icons[type] ?? Icons.trip_origin_rounded,
-                      size: 20,
-                      color: sel ? AppColors.primary : AppColors.textSecondaryLight,
-                    ),
-                    const SizedBox(width: AppConstants.spacingMd),
-                    Expanded(
-                      child: Text(
-                        _tripTypeDisplayLabel(type),
-                        style: GoogleFonts.nunito(
-                          fontSize: 15,
-                          fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                          color: sel ? AppColors.primary : AppColors.textPrimaryLight,
+          // ── Scrollable option list
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ...TripType.values.map((type) {
+                    final sel = type == selected;
+                    return InkWell(
+                      onTap: () => onSelect(type),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppConstants.screenPaddingH, vertical: 13),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _icons[type] ?? Icons.trip_origin_rounded,
+                              size: 20,
+                              color: sel
+                                  ? AppColors.primary
+                                  : AppColors.textSecondaryLight,
+                            ),
+                            const SizedBox(width: AppConstants.spacingMd),
+                            Expanded(
+                              child: Text(
+                                _tripTypeDisplayLabel(type),
+                                style: GoogleFonts.nunito(
+                                  fontSize: 15,
+                                  fontWeight:
+                                      sel ? FontWeight.w700 : FontWeight.w500,
+                                  color: sel
+                                      ? AppColors.primary
+                                      : AppColors.textPrimaryLight,
+                                ),
+                              ),
+                            ),
+                            if (sel)
+                              const Icon(Icons.check_circle_rounded,
+                                  color: AppColors.primary, size: 20),
+                          ],
                         ),
                       ),
-                    ),
-                    if (sel)
-                      const Icon(Icons.check_circle_rounded,
-                          color: AppColors.primary, size: 20),
-                  ],
-                ),
+                    );
+                  }),
+                  const SizedBox(height: AppConstants.spacingLg),
+                ],
               ),
-            );
-          }),
+            ),
+          ),
         ],
       ),
     );
