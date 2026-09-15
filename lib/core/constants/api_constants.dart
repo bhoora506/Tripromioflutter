@@ -62,4 +62,16 @@ abstract final class ApiConstants {
 
   /// Build a trip action path, e.g. '/trips/42/publish'.
   static String tripAction(int id, String action) => '/trips/$id/$action';
+
+  // ── Join-request endpoints ─────────────────────────────────────────────────
+
+  /// POST   /api/trips/{trip}/join-requests          (create)
+  /// GET    /api/trips/{trip}/join-requests          (owner list)
+  static String tripJoinRequests(int tripId) => '/trips/$tripId/join-requests';
+
+  /// POST   /api/trips/{trip}/join-requests/{jr}/approve
+  /// POST   /api/trips/{trip}/join-requests/{jr}/reject
+  /// POST   /api/trips/{trip}/join-requests/{jr}/cancel
+  static String tripJoinRequestAction(int tripId, int joinRequestId, String action) =>
+      '/trips/$tripId/join-requests/$joinRequestId/$action';
 }

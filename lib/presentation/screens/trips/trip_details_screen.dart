@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/models/trip_join_request_model.dart';
 import '../../../data/models/trip_model.dart';
 import '../../../data/services/profile_service.dart';
 import '../../../data/services/trip_service.dart';
@@ -32,6 +33,18 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
   bool _loading = true;
   String? _errorMessage;
   bool _actionInProgress = false;
+
+  // ── Join-request state (session only) ─────────────────────────────────────
+  //
+  // The backend does not expose a "get my pending request" endpoint for
+  // non-owners. We track the request in memory for the lifetime of this
+  // screen session:
+  //   • Set when the user successfully submits a request.
+  //   • Cleared when the user cancels a request.
+  //   • Treated as unknown on a fresh open (backend is source of truth).
+  //
+  // 409 on re-submission reveals the existing state to the user via snackbar.
+  TripJoinRequestModel? _myRequest;
 
   @override
   void initState() {
@@ -227,6 +240,89 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
     if (result is TripModel && mounted) {
       setState(() => _trip = result);
     }
+  }
+
+  // ── Join request (requester flow) ─────────────────────────────────────────
+
+  Future<void> _joinRequest() async {
+    if (_actionInProgress || _trip == null) return;
+
+    setState(() => _actionInProgress = true);
+    try {
+      final request = await _tripService.createJoinRequest(_trip!.id);
+      if (!mounted) return;
+      setState(() => _myRequest = request);
+      _showSnack('Request submitted! The trip owner will review it.',
+          isSuccess: true);
+    } on ConflictException catch (e) {
+      // 409 — already pending / full / past trip / already member
+      if (mounted) {
+        _showSnack(e.message);
+        // Assume the most common 409 reason is an existing pending request.
+        // Refresh trip data to pick up any capacity change.
+        if (_trip != null) _refreshTrip(_trip!.id);
+      }
+    } on ForbiddenException catch (e) {
+      if (mounted) _showSnack(e.message);
+    } on ApiException catch (e) {
+      if (mounted) _showSnack(e.message);
+    } finally {
+      if (mounted) setState(() => _actionInProgress = false);
+    }
+  }
+
+  Future<void> _cancelJoinRequest() async {
+    if (_actionInProgress || _myRequest == null || _trip == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Request?'),
+        content: const Text(
+            'Cancel your join request for this trip?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Cancel Request',
+                style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _actionInProgress = true);
+    try {
+      await _tripService.cancelJoinRequest(_trip!.id, _myRequest!.id);
+      if (!mounted) return;
+      setState(() => _myRequest = null);
+      _showSnack('Join request cancelled.');
+    } on ConflictException catch (e) {
+      // 409 — request no longer pending (already approved/rejected externally)
+      if (mounted) {
+        _showSnack(e.message);
+        // Clear local state — it's stale
+        setState(() => _myRequest = null);
+      }
+    } on ApiException catch (e) {
+      if (mounted) _showSnack(e.message);
+    } finally {
+      if (mounted) setState(() => _actionInProgress = false);
+    }
+  }
+
+  // ── Owner: open join requests screen ─────────────────────────────────────
+
+  void _openJoinRequests() {
+    if (_trip == null) return;
+    Navigator.of(context).pushNamed(
+      AppRoutes.tripJoinRequests,
+      arguments: _trip!.id,
+    );
   }
 
   void _showSnack(String msg, {bool isSuccess = false}) {
@@ -508,10 +604,14 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
             trip: trip,
             isOwner: _isOwner,
             actionInProgress: _actionInProgress,
+            myRequest: _myRequest,
             botPad: botPad,
             onEdit: _editTrip,
             onPublish: _publishTrip,
             onCancel: _cancelTrip,
+            onJoinRequest: _joinRequest,
+            onCancelRequest: _cancelJoinRequest,
+            onViewJoinRequests: _openJoinRequests,
           ),
         ),
       ]),
@@ -885,23 +985,31 @@ class _StickyActions extends StatelessWidget {
     required this.trip,
     required this.isOwner,
     required this.actionInProgress,
+    required this.myRequest,
     required this.botPad,
     required this.onEdit,
     required this.onPublish,
     required this.onCancel,
+    required this.onJoinRequest,
+    required this.onCancelRequest,
+    required this.onViewJoinRequests,
   });
 
   final TripModel trip;
   final bool isOwner;
   final bool actionInProgress;
+  final TripJoinRequestModel? myRequest;
   final double botPad;
   final VoidCallback onEdit;
   final VoidCallback onPublish;
   final VoidCallback onCancel;
+  final VoidCallback onJoinRequest;
+  final VoidCallback onCancelRequest;
+  final VoidCallback onViewJoinRequests;
 
   @override
   Widget build(BuildContext context) {
-    // Determine which actions to show based on ownership + status
+    // ── Owner flags ──────────────────────────────────────────────────────────
     final bool canEdit = isOwner &&
         (trip.status == TripStatus.draft ||
             trip.status == TripStatus.published ||
@@ -912,9 +1020,33 @@ class _StickyActions extends StatelessWidget {
         (trip.status == TripStatus.draft ||
             trip.status == TripStatus.published ||
             trip.status == TripStatus.ongoing);
+    // Owner sees a "Join Requests" button for published/ongoing trips
+    final bool canViewRequests = isOwner &&
+        (trip.status == TripStatus.published ||
+            trip.status == TripStatus.ongoing);
 
-    // If no actions available (not owner, or terminal status), show nothing
-    if (!canEdit && !canPublish && !canCancel) {
+    // ── Requester flags ──────────────────────────────────────────────────────
+    // A non-owner can request to join a published trip when:
+    //   • trip is published
+    //   • there are remaining slots
+    //   • no pending/approved request in this session
+    final bool isPending =
+        myRequest?.status == JoinRequestStatus.pending;
+    final bool isApproved =
+        myRequest?.status == JoinRequestStatus.approved;
+    final bool isFull = trip.remainingSlots == 0;
+
+    final bool canRequestJoin = !isOwner &&
+        trip.status == TripStatus.published &&
+        !isPending &&
+        !isApproved &&
+        !isFull;
+    final bool canCancelRequest = !isOwner && isPending;
+
+    // If no actions relevant, render nothing
+    if (!canEdit && !canPublish && !canCancel &&
+        !canViewRequests && !canRequestJoin &&
+        !canCancelRequest && !isApproved) {
       return const SizedBox.shrink();
     }
 
@@ -935,81 +1067,257 @@ class _StickyActions extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(children: [
-        // Cancel (destructive, outlined)
-        if (canCancel)
-          Expanded(
-            child: OutlinedButton(
-              onPressed: actionInProgress ? null : onCancel,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.error,
-                side: BorderSide(
-                    color: AppColors.error.withValues(alpha: 0.5)),
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(AppConstants.radiusMd)),
-                textStyle: GoogleFonts.nunito(
-                    fontSize: 14, fontWeight: FontWeight.w700),
-              ),
-              child: const Text('Cancel Trip'),
-            ),
-          ),
-        if (canCancel && (canEdit || canPublish))
-          const SizedBox(width: AppConstants.spacingSm),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
 
-        // Edit
-        if (canEdit)
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: actionInProgress ? null : onEdit,
-              icon: const Icon(Icons.edit_rounded, size: 16),
-              label: const Text('Edit'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: BorderSide(
-                    color: AppColors.primary.withValues(alpha: 0.5)),
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(AppConstants.radiusMd)),
-                textStyle: GoogleFonts.nunito(
-                    fontSize: 14, fontWeight: FontWeight.w700),
+          // ── Owner: View Join Requests button ─────────────────────────────
+          if (canViewRequests) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: actionInProgress ? null : onViewJoinRequests,
+                icon: const Icon(Icons.group_add_rounded, size: 16),
+                label: const Text('View Join Requests'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.5)),
+                  minimumSize: const Size.fromHeight(44),
+                  shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusMd)),
+                  textStyle: GoogleFonts.nunito(
+                      fontSize: 14, fontWeight: FontWeight.w700),
+                ),
               ),
             ),
-          ),
-        if (canEdit && canPublish)
-          const SizedBox(width: AppConstants.spacingSm),
+            if (canEdit || canPublish || canCancel)
+              const SizedBox(height: AppConstants.spacingSm),
+          ],
 
-        // Publish (primary, filled)
-        if (canPublish)
-          Expanded(
-            flex: 2,
-            child: ElevatedButton.icon(
-              onPressed: actionInProgress ? null : onPublish,
-              icon: actionInProgress
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.publish_rounded, size: 16),
-              label: const Text('Publish'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(AppConstants.radiusMd)),
-                textStyle: GoogleFonts.nunito(
-                    fontSize: 14, fontWeight: FontWeight.w700),
+          // ── Requester: Request to Join / Cancel / Already Approved ────────
+          if (!isOwner) ...[
+            if (isFull && trip.status == TripStatus.published &&
+                myRequest == null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.textSecondaryLight.withValues(alpha: 0.08),
+                  borderRadius:
+                      BorderRadius.circular(AppConstants.radiusMd),
+                ),
+                child: Center(
+                  child: Text(
+                    'Trip is full',
+                    style: GoogleFonts.nunito(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondaryLight,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-      ]),
+            if (isApproved)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.10),
+                  borderRadius:
+                      BorderRadius.circular(AppConstants.radiusMd),
+                  border: Border.all(
+                      color: AppColors.success.withValues(alpha: 0.3)),
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_circle_rounded,
+                          size: 16, color: AppColors.success),
+                      const SizedBox(width: 6),
+                      Text(
+                        'You are a member of this trip',
+                        style: GoogleFonts.nunito(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (isPending) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withValues(alpha: 0.10),
+                        borderRadius:
+                            BorderRadius.circular(AppConstants.radiusMd),
+                        border: Border.all(
+                            color:
+                                AppColors.warning.withValues(alpha: 0.3)),
+                      ),
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.hourglass_top_rounded,
+                                size: 14, color: AppColors.warning),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Request Pending',
+                              style: GoogleFonts.nunito(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.warning,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacingSm),
+                  OutlinedButton(
+                    onPressed:
+                        actionInProgress ? null : onCancelRequest,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: BorderSide(
+                          color:
+                              AppColors.error.withValues(alpha: 0.5)),
+                      minimumSize:
+                          const Size(88, 44),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                              AppConstants.radiusMd)),
+                      textStyle: GoogleFonts.nunito(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ],
+            if (canRequestJoin)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: actionInProgress ? null : onJoinRequest,
+                  icon: actionInProgress
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.person_add_rounded, size: 16),
+                  label: const Text('Request to Join'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppConstants.radiusMd)),
+                    textStyle: GoogleFonts.nunito(
+                        fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            if ((isFull || isApproved || isPending || canRequestJoin) &&
+                (canEdit || canPublish || canCancel))
+              const SizedBox(height: AppConstants.spacingSm),
+          ],
+
+          // ── Owner actions row ─────────────────────────────────────────────
+          if (canEdit || canPublish || canCancel)
+            Row(children: [
+              // Cancel (destructive, outlined)
+              if (canCancel)
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: actionInProgress ? null : onCancel,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: BorderSide(
+                          color: AppColors.error.withValues(alpha: 0.5)),
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppConstants.radiusMd)),
+                      textStyle: GoogleFonts.nunito(
+                          fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                    child: const Text('Cancel Trip'),
+                  ),
+                ),
+              if (canCancel && (canEdit || canPublish))
+                const SizedBox(width: AppConstants.spacingSm),
+
+              // Edit
+              if (canEdit)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: actionInProgress ? null : onEdit,
+                    icon: const Icon(Icons.edit_rounded, size: 16),
+                    label: const Text('Edit'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.5)),
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppConstants.radiusMd)),
+                      textStyle: GoogleFonts.nunito(
+                          fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              if (canEdit && canPublish)
+                const SizedBox(width: AppConstants.spacingSm),
+
+              // Publish (primary, filled)
+              if (canPublish)
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: actionInProgress ? null : onPublish,
+                    icon: actionInProgress
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.publish_rounded, size: 16),
+                    label: const Text('Publish'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppConstants.radiusMd)),
+                      textStyle: GoogleFonts.nunito(
+                          fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+            ]),
+        ],
+      ),
     );
   }
 }

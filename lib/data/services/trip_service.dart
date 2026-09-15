@@ -1,5 +1,6 @@
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_client.dart';
+import '../models/trip_join_request_model.dart';
 import '../models/trip_model.dart';
 
 /// Service for trip-related API calls.
@@ -7,13 +8,19 @@ import '../models/trip_model.dart';
 /// Wraps [ApiClient] — the UI never touches the HTTP layer directly.
 ///
 /// Endpoints covered:
-///   GET    /api/trips               → [getTrips]      (discover)
-///   GET    /api/trips/{id}          → [getTrip]        (single)
-///   POST   /api/trips               → [createTrip]
-///   PUT    /api/trips/{id}          → [updateTrip]
-///   GET    /api/my/trips            → [getMyTrips]
-///   POST   /api/trips/{id}/publish  → [publishTrip]
-///   POST   /api/trips/{id}/cancel   → [cancelTrip]
+///   GET    /api/trips                                     → [getTrips]
+///   GET    /api/trips/{id}                                → [getTrip]
+///   POST   /api/trips                                     → [createTrip]
+///   PUT    /api/trips/{id}                                → [updateTrip]
+///   GET    /api/my/trips                                  → [getMyTrips]
+///   POST   /api/trips/{id}/publish                        → [publishTrip]
+///   POST   /api/trips/{id}/cancel                         → [cancelTrip]
+///
+///   POST   /api/trips/{id}/join-requests                  → [createJoinRequest]
+///   GET    /api/trips/{id}/join-requests                  → [getJoinRequests]
+///   POST   /api/trips/{id}/join-requests/{jr}/approve     → [approveJoinRequest]
+///   POST   /api/trips/{id}/join-requests/{jr}/reject      → [rejectJoinRequest]
+///   POST   /api/trips/{id}/join-requests/{jr}/cancel      → [cancelJoinRequest]
 class TripService {
   TripService({ApiClient? client}) : _client = client ?? ApiClient();
 
@@ -262,4 +269,95 @@ class TripService {
 
   /// Release resources.  Call when the service is no longer needed.
   void dispose() => _client.dispose();
+
+  // ── Join-request endpoints ─────────────────────────────────────────────────
+
+  // Internal helper: parse a join_request object from an API response map.
+  TripJoinRequestModel _parseJoinRequest(Map<String, dynamic> data) {
+    final jrJson = data['join_request'] as Map<String, dynamic>?;
+    if (jrJson != null) return TripJoinRequestModel.fromJson(jrJson);
+    return TripJoinRequestModel.fromJson(data);
+  }
+
+  /// POST /api/trips/{tripId}/join-requests
+  ///
+  /// Submit a join request for a published trip.
+  ///
+  /// Throws [ForbiddenException] (403) when:
+  ///   • caller is the trip owner, or
+  ///   • trip is not in `published` status.
+  ///
+  /// Throws [ConflictException] (409) when:
+  ///   • there is already a pending request,
+  ///   • caller is already a member, or
+  ///   • trip is past or full.
+  Future<TripJoinRequestModel> createJoinRequest(int tripId) async {
+    final response = await _client.post(ApiConstants.tripJoinRequests(tripId));
+    return _parseJoinRequest(response.dataAsMap);
+  }
+
+  /// GET /api/trips/{tripId}/join-requests
+  ///
+  /// Fetch the list of join requests for a trip.
+  ///
+  /// **Owner-only endpoint** — the backend returns 403 for non-owners.
+  ///
+  /// Returns join requests of all statuses (pending, approved, rejected,
+  /// cancelled) as a flat list; no server-side pagination on this endpoint.
+  Future<List<TripJoinRequestModel>> getJoinRequests(int tripId) async {
+    final response = await _client.get(ApiConstants.tripJoinRequests(tripId));
+    final data = response.dataAsMap;
+    final list = data['join_requests'] as List<dynamic>? ?? [];
+    return list
+        .map((e) => TripJoinRequestModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// POST /api/trips/{tripId}/join-requests/{joinRequestId}/approve
+  ///
+  /// Owner-only: approve a pending join request.
+  ///
+  /// Throws [ConflictException] (409) when the trip is full, no longer
+  /// published, or the request has already been actioned.
+  Future<TripJoinRequestModel> approveJoinRequest(
+    int tripId,
+    int joinRequestId,
+  ) async {
+    final response = await _client.post(
+      ApiConstants.tripJoinRequestAction(tripId, joinRequestId, 'approve'),
+    );
+    return _parseJoinRequest(response.dataAsMap);
+  }
+
+  /// POST /api/trips/{tripId}/join-requests/{joinRequestId}/reject
+  ///
+  /// Owner-only: reject a pending join request.
+  ///
+  /// Throws [ConflictException] (409) if the request has already been
+  /// actioned.
+  Future<TripJoinRequestModel> rejectJoinRequest(
+    int tripId,
+    int joinRequestId,
+  ) async {
+    final response = await _client.post(
+      ApiConstants.tripJoinRequestAction(tripId, joinRequestId, 'reject'),
+    );
+    return _parseJoinRequest(response.dataAsMap);
+  }
+
+  /// POST /api/trips/{tripId}/join-requests/{joinRequestId}/cancel
+  ///
+  /// Requester-only: cancel a pending join request.
+  ///
+  /// Throws [ConflictException] (409) if the request is not in `pending`
+  /// status.
+  Future<TripJoinRequestModel> cancelJoinRequest(
+    int tripId,
+    int joinRequestId,
+  ) async {
+    final response = await _client.post(
+      ApiConstants.tripJoinRequestAction(tripId, joinRequestId, 'cancel'),
+    );
+    return _parseJoinRequest(response.dataAsMap);
+  }
 }

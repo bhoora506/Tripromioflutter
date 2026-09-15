@@ -23,6 +23,10 @@ abstract final class AppRoutes {
   static const String createTrip = '/trips/create';
   static const String editTrip = '/trips/edit';
 
+  /// Owner-only join-request management screen.
+  /// Argument: [int] tripId
+  static const String tripJoinRequests = '/trips/join-requests';
+
   // ── Matching / Companions ──────────────────────────────────────────────────────
   static const String findCompanions = '/find-companions';
   static const String searchResults = '/find-companions/results';

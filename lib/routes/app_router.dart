@@ -18,6 +18,7 @@ import '../presentation/screens/trips/create_trip_screen.dart';
 import '../presentation/screens/trips/edit_trip_screen.dart';
 import '../presentation/screens/trips/my_trips_screen.dart';
 import '../presentation/screens/trips/trip_details_screen.dart';
+import '../presentation/screens/trips/trip_join_requests_screen.dart';
 
 /// Central route generator for the application.
 ///
@@ -49,6 +50,7 @@ abstract final class AppRouter {
       AppRoutes.trips => const MyTripsScreen(),
       AppRoutes.createTrip => const CreateTripScreen(),
       AppRoutes.editTrip => const EditTripScreen(),
+      AppRoutes.tripJoinRequests => const TripJoinRequestsScreen(),
 
       // ── Phase 5 — Companion Flow ───────────────────────────────────────────
       // /find-companions → FindCompanionsScreen (form)
