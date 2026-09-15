@@ -35,16 +35,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
   bool _actionInProgress = false;
 
   // ── Join-request state (session only) ─────────────────────────────────────
-  //
-  // The backend does not expose a "get my pending request" endpoint for
-  // non-owners. We track the request in memory for the lifetime of this
-  // screen session:
-  //   • Set when the user successfully submits a request.
-  //   • Cleared when the user cancels a request.
-  //   • Treated as unknown on a fresh open (backend is source of truth).
-  //
-  // 409 on re-submission reveals the existing state to the user via snackbar.
-  TripJoinRequestModel? _myRequest;
+  // (Removed in D.3: backend now provides trip.membership as source of truth)
 
   @override
   void initState() {
@@ -249,9 +240,10 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
 
     setState(() => _actionInProgress = true);
     try {
-      final request = await _tripService.createJoinRequest(_trip!.id);
+      await _tripService.createJoinRequest(_trip!.id);
       if (!mounted) return;
-      setState(() => _myRequest = request);
+      // Refresh the full trip to get the new membership state
+      _refreshTrip(_trip!.id);
       _showSnack('Request submitted! The trip owner will review it.',
           isSuccess: true);
     } on ConflictException catch (e) {
@@ -272,7 +264,13 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
   }
 
   Future<void> _cancelJoinRequest() async {
-    if (_actionInProgress || _myRequest == null || _trip == null) return;
+    if (_actionInProgress || _trip == null) return;
+    
+    final joinRequestId = _trip?.membership?.joinRequestId;
+    if (joinRequestId == null) {
+      _showSnack('Unable to cancel request. Please try again.');
+      return;
+    }
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -297,16 +295,16 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
 
     setState(() => _actionInProgress = true);
     try {
-      await _tripService.cancelJoinRequest(_trip!.id, _myRequest!.id);
+      await _tripService.cancelJoinRequest(_trip!.id, joinRequestId);
       if (!mounted) return;
-      setState(() => _myRequest = null);
+      // Refresh the full trip to clear the membership state
+      _refreshTrip(_trip!.id);
       _showSnack('Join request cancelled.');
     } on ConflictException catch (e) {
       // 409 — request no longer pending (already approved/rejected externally)
       if (mounted) {
         _showSnack(e.message);
-        // Clear local state — it's stale
-        setState(() => _myRequest = null);
+        _refreshTrip(_trip!.id);
       }
     } on ApiException catch (e) {
       if (mounted) _showSnack(e.message);
@@ -574,6 +572,42 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
                       const SizedBox(height: AppConstants.spacingLg),
                     ],
 
+                    // Trip Members
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pushNamed(
+                          AppRoutes.tripMembers,
+                          arguments: trip.id,
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Text('Members',
+                                style: GoogleFonts.nunito(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.textPrimaryLight)),
+                            const Spacer(),
+                            Text(
+                              '${trip.memberCount}/${trip.maxMembers}',
+                              style: GoogleFonts.nunito(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.chevron_right_rounded,
+                                size: 20, color: AppColors.textSecondaryLight),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacingLg),
+
                     // Trip Host
                     if (trip.owner != null) ...[
                       Text('Trip Host',
@@ -604,7 +638,6 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
             trip: trip,
             isOwner: _isOwner,
             actionInProgress: _actionInProgress,
-            myRequest: _myRequest,
             botPad: botPad,
             onEdit: _editTrip,
             onPublish: _publishTrip,
@@ -985,7 +1018,6 @@ class _StickyActions extends StatelessWidget {
     required this.trip,
     required this.isOwner,
     required this.actionInProgress,
-    required this.myRequest,
     required this.botPad,
     required this.onEdit,
     required this.onPublish,
@@ -998,7 +1030,6 @@ class _StickyActions extends StatelessWidget {
   final TripModel trip;
   final bool isOwner;
   final bool actionInProgress;
-  final TripJoinRequestModel? myRequest;
   final double botPad;
   final VoidCallback onEdit;
   final VoidCallback onPublish;
@@ -1026,14 +1057,9 @@ class _StickyActions extends StatelessWidget {
             trip.status == TripStatus.ongoing);
 
     // ── Requester flags ──────────────────────────────────────────────────────
-    // A non-owner can request to join a published trip when:
-    //   • trip is published
-    //   • there are remaining slots
-    //   • no pending/approved request in this session
     final bool isPending =
-        myRequest?.status == JoinRequestStatus.pending;
-    final bool isApproved =
-        myRequest?.status == JoinRequestStatus.approved;
+        trip.membership?.joinRequestStatus == JoinRequestStatus.pending;
+    final bool isApproved = trip.membership?.isMember == true;
     final bool isFull = trip.remainingSlots == 0;
 
     final bool canRequestJoin = !isOwner &&
@@ -1099,7 +1125,7 @@ class _StickyActions extends StatelessWidget {
           // ── Requester: Request to Join / Cancel / Already Approved ────────
           if (!isOwner) ...[
             if (isFull && trip.status == TripStatus.published &&
-                myRequest == null)
+                !isPending && !isApproved)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),

@@ -20,6 +20,7 @@ abstract final class AppRoutes {
   // ── Trips ─────────────────────────────────────────────────────────────────
   static const String trips = '/trips';
   static const String tripDetail = '/trips/:tripId';
+  static const String tripMembers = '/trips/members';
   static const String createTrip = '/trips/create';
   static const String editTrip = '/trips/edit';
 

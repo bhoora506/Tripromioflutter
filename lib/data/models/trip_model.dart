@@ -1,4 +1,5 @@
 import 'interest_model.dart';
+import 'trip_membership_model.dart';
 
 // ── Trip Type ────────────────────────────────────────────────────────────────
 
@@ -157,6 +158,7 @@ class TripModel {
     this.interests = const [],
     required this.memberCount,
     required this.remainingSlots,
+    this.membership,
     this.createdAt,
     this.updatedAt,
   });
@@ -179,6 +181,7 @@ class TripModel {
   final List<InterestModel> interests;
   final int memberCount;
   final int remainingSlots;
+  final TripMembershipModel? membership;
   final String? createdAt;
   final String? updatedAt;
 
@@ -207,6 +210,9 @@ class TripModel {
           [],
       memberCount: _parseInt(json['member_count']),
       remainingSlots: _parseInt(json['remaining_slots']),
+      membership: json['membership'] != null
+          ? TripMembershipModel.fromJson(json['membership'] as Map<String, dynamic>)
+          : null,
       createdAt: json['created_at'] as String?,
       updatedAt: json['updated_at'] as String?,
     );

@@ -23,6 +23,149 @@ class MyTripsScreen extends StatefulWidget {
 
 class _MyTripsScreenState extends State<MyTripsScreen> {
   final _tripService = TripService();
+
+  @override
+  void dispose() {
+    _tripService.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ));
+
+    final topPad = MediaQuery.paddingOf(context).top;
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppColors.backgroundLight,
+        floatingActionButton: FloatingActionButton(
+          onPressed: () async {
+            await Navigator.of(context).pushNamed(AppRoutes.createTrip);
+          },
+          backgroundColor: AppColors.primary,
+          child: const Icon(Icons.add_rounded, color: Colors.white),
+        ),
+        body: Column(
+          children: [
+            // ── Header ──────────────────────────────────────────────────────
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                AppConstants.screenPaddingH,
+                topPad + AppConstants.spacingMd,
+                AppConstants.screenPaddingH,
+                0, // TabBar handles bottom padding
+              ),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF0A1628), Color(0xFF0F3460)],
+                ),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(AppConstants.radiusXl),
+                  bottomRight: Radius.circular(AppConstants.radiusXl),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.arrow_back_ios_new_rounded,
+                              color: Colors.white, size: 17),
+                        ),
+                      ),
+                      const SizedBox(width: AppConstants.spacingMd),
+                      Text(
+                        'My Trips',
+                        style: GoogleFonts.nunito(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TabBar(
+                    indicatorColor: Colors.white,
+                    indicatorWeight: 3,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+                    labelStyle: GoogleFonts.nunito(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    unselectedLabelStyle: GoogleFonts.nunito(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    dividerColor: Colors.transparent,
+                    tabs: const [
+                      Tab(text: 'Created'),
+                      Tab(text: 'Joined'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Body ────────────────────────────────────────────────────────
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _TripListView(
+                    fetcher: (page) => _tripService.getMyTrips(page: page),
+                    emptyMessage: 'You haven\'t created any trips yet.',
+                  ),
+                  _TripListView(
+                    fetcher: (page) => _tripService.getMyJoinedTrips(page: page),
+                    emptyMessage: 'You haven\'t joined any trips yet.',
+                    hideStatusBadge: true,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _TripListView
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TripListView extends StatefulWidget {
+  const _TripListView({
+    required this.fetcher,
+    required this.emptyMessage,
+    this.hideStatusBadge = false,
+  });
+
+  final Future<PaginatedTripsModel> Function(int page) fetcher;
+  final String emptyMessage;
+  final bool hideStatusBadge;
+
+  @override
+  State<_TripListView> createState() => _TripListViewState();
+}
+
+class _TripListViewState extends State<_TripListView> {
   final _scrollController = ScrollController();
 
   List<TripModel> _trips = [];
@@ -42,7 +185,6 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
-    _tripService.dispose();
     super.dispose();
   }
 
@@ -62,7 +204,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     });
 
     try {
-      final result = await _tripService.getMyTrips(page: 1);
+      final result = await widget.fetcher(1);
       if (!mounted) return;
       setState(() {
         _trips = result.items;
@@ -102,7 +244,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
     try {
       final nextPage = _currentPage + 1;
-      final result = await _tripService.getMyTrips(page: nextPage);
+      final result = await widget.fetcher(nextPage);
       if (!mounted) return;
       setState(() {
         _trips.addAll(result.items);
@@ -119,163 +261,72 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     Navigator.of(context).pushNamed(
       AppRoutes.tripDetail,
       arguments: trip.id,
-    );
+    ).then((_) {
+      if (mounted) _load();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-    ));
-
-    final topPad = MediaQuery.paddingOf(context).top;
     final botPad = MediaQuery.paddingOf(context).bottom;
 
-    return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          await Navigator.of(context).pushNamed(AppRoutes.createTrip);
-          // Refresh list when returning from create
-          if (mounted) _load();
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return _ErrorView(message: _errorMessage!, onRetry: _load);
+    }
+
+    if (_trips.isEmpty) {
+      return _EmptyView(
+        message: widget.emptyMessage,
+        onRefresh: _load,
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: _load,
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: EdgeInsets.fromLTRB(
+          AppConstants.screenPaddingH,
+          AppConstants.spacingMd,
+          AppConstants.screenPaddingH,
+          botPad + 80,
+        ),
+        itemCount: _trips.length + (_loadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _trips.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+            );
+          }
+
+          final trip = _trips[index];
+          final card = TripCardData.fromTripModel(trip);
+
+          return Column(
+            children: [
+              TripCard(
+                data: card,
+                onTap: () => _onTripTap(trip),
+              ),
+              if (!widget.hideStatusBadge) _TripStatusBadge(status: trip.status)
+              else const SizedBox(height: 16),
+            ],
+          );
         },
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add_rounded, color: Colors.white),
-      ),
-      body: Column(
-        children: [
-          // ── Header ──────────────────────────────────────────────────────
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              AppConstants.screenPaddingH,
-              topPad + AppConstants.spacingMd,
-              AppConstants.screenPaddingH,
-              AppConstants.spacingLg,
-            ),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF0A1628), Color(0xFF0F3460)],
-              ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(AppConstants.radiusXl),
-                bottomRight: Radius.circular(AppConstants.radiusXl),
-              ),
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white, size: 17),
-                  ),
-                ),
-                const SizedBox(width: AppConstants.spacingMd),
-                Text(
-                  'My Trips',
-                  style: GoogleFonts.nunito(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-                const Spacer(),
-                if (!_loading && _trips.isNotEmpty)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius:
-                          BorderRadius.circular(AppConstants.radiusFull),
-                    ),
-                    child: Text(
-                      '${_trips.length} trip${_trips.length == 1 ? '' : 's'}',
-                      style: GoogleFonts.nunito(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withValues(alpha: 0.85),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // ── Body ────────────────────────────────────────────────────────
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _errorMessage != null
-                    ? _ErrorView(
-                        message: _errorMessage!, onRetry: _load)
-                    : _trips.isEmpty
-                        ? _EmptyView(
-                            onCreateTrip: () {
-                              Navigator.of(context)
-                                  .pushNamed(AppRoutes.createTrip)
-                                  .then((_) {
-                                if (mounted) _load();
-                              });
-                            },
-                          )
-                        : RefreshIndicator(
-                            color: AppColors.primary,
-                            onRefresh: _load,
-                            child: ListView.builder(
-                              controller: _scrollController,
-                              padding: EdgeInsets.fromLTRB(
-                                AppConstants.screenPaddingH,
-                                AppConstants.spacingMd,
-                                AppConstants.screenPaddingH,
-                                botPad + 80,
-                              ),
-                              itemCount: _trips.length + (_loadingMore ? 1 : 0),
-                              itemBuilder: (context, index) {
-                                if (index == _trips.length) {
-                                  return const Padding(
-                                    padding:
-                                        EdgeInsets.symmetric(vertical: 16),
-                                    child: Center(
-                                      child: SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }
-
-                                final trip = _trips[index];
-                                final card =
-                                    TripCardData.fromTripModel(trip);
-
-                                return Column(
-                                  children: [
-                                    TripCard(
-                                      data: card,
-                                      onTap: () => _onTripTap(trip),
-                                    ),
-                                    // Status badge below card
-                                    _TripStatusBadge(status: trip.status),
-                                  ],
-                                );
-                              },
-                            ),
-                          ),
-          ),
-        ],
       ),
     );
   }
@@ -298,46 +349,52 @@ class _TripStatusBadge extends StatelessWidget {
         bgColor = AppColors.warning.withValues(alpha: 0.12);
         textColor = AppColors.warning;
         label = '● Draft';
+        break;
       case TripStatus.published:
-        bgColor = AppColors.success.withValues(alpha: 0.12);
-        textColor = AppColors.success;
-        label = '● Published';
-      case TripStatus.ongoing:
         bgColor = AppColors.info.withValues(alpha: 0.12);
         textColor = AppColors.info;
+        label = '● Published';
+        break;
+      case TripStatus.ongoing:
+        bgColor = AppColors.success.withValues(alpha: 0.12);
+        textColor = AppColors.success;
         label = '● Ongoing';
+        break;
       case TripStatus.completed:
-        bgColor = AppColors.textSecondaryLight.withValues(alpha: 0.12);
-        textColor = AppColors.textSecondaryLight;
+        bgColor = AppColors.success.withValues(alpha: 0.12);
+        textColor = AppColors.success;
         label = '● Completed';
+        break;
       case TripStatus.cancelled:
         bgColor = AppColors.error.withValues(alpha: 0.12);
         textColor = AppColors.error;
         label = '● Cancelled';
+        break;
       case TripStatus.unknown:
-        bgColor = AppColors.textSecondaryLight.withValues(alpha: 0.12);
-        textColor = AppColors.textSecondaryLight;
-        label = '● Unknown';
+        bgColor = AppColors.textHintLight.withValues(alpha: 0.12);
+        textColor = AppColors.textHintLight;
+        label = 'Unknown';
+        break;
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppConstants.spacingMd),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(AppConstants.radiusFull),
-          ),
-          child: Text(
-            label,
-            style: GoogleFonts.nunito(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: textColor,
-            ),
-          ),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(16),
+          bottomRight: Radius.circular(16),
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: GoogleFonts.nunito(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: textColor,
         ),
       ),
     );
@@ -347,60 +404,56 @@ class _TripStatusBadge extends StatelessWidget {
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyView extends StatelessWidget {
-  const _EmptyView({required this.onCreateTrip});
-  final VoidCallback onCreateTrip;
+  const _EmptyView({required this.message, required this.onRefresh});
+  final String message;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.flight_takeoff_rounded,
-                size: 40, color: AppColors.primary),
-          ),
-          const SizedBox(height: AppConstants.spacingMd),
-          Text(
-            'No trips yet',
-            style: GoogleFonts.nunito(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimaryLight,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Create your first trip and find companions!',
-            style: GoogleFonts.nunito(
-              fontSize: 14,
-              color: AppColors.textSecondaryLight,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingLg),
-          ElevatedButton.icon(
-            onPressed: onCreateTrip,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Create Trip'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.05),
+                shape: BoxShape.circle,
               ),
-              textStyle:
-                  GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w700),
+              child: const Icon(
+                Icons.travel_explore_rounded,
+                size: 56,
+                color: AppColors.primary,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 24),
+            Text(
+              'No Trips Here',
+              style: GoogleFonts.nunito(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimaryLight,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.nunito(
+                fontSize: 15,
+                color: AppColors.textSecondaryLight,
+              ),
+            ),
+            const SizedBox(height: 24),
+            TextButton.icon(
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Refresh'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -421,16 +474,14 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_rounded,
+            const Icon(Icons.error_outline_rounded,
                 size: 56, color: AppColors.textSecondaryLight),
             const SizedBox(height: 16),
             Text(
               message,
               textAlign: TextAlign.center,
               style: GoogleFonts.nunito(
-                fontSize: 15,
-                color: AppColors.textSecondaryLight,
-              ),
+                  fontSize: 15, color: AppColors.textSecondaryLight),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(

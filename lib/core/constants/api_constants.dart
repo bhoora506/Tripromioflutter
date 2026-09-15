@@ -56,12 +56,16 @@ abstract final class ApiConstants {
   // ── Trip endpoints ────────────────────────────────────────────────────────
   static const String trips = '/trips';
   static const String myTrips = '/my/trips';
+  static const String myJoinedTrips = '/my/joined-trips';
 
   /// Build a trip-specific path, e.g. '/trips/42'.
   static String tripById(int id) => '/trips/$id';
 
   /// Build a trip action path, e.g. '/trips/42/publish'.
   static String tripAction(int id, String action) => '/trips/$id/$action';
+
+  /// GET /api/trips/{trip}/members
+  static String tripMembers(int tripId) => '/trips/$tripId/members';
 
   // ── Join-request endpoints ─────────────────────────────────────────────────
 

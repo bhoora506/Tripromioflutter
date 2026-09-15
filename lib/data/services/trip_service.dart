@@ -1,6 +1,7 @@
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_client.dart';
 import '../models/trip_join_request_model.dart';
+import '../models/trip_member_model.dart';
 import '../models/trip_model.dart';
 
 /// Service for trip-related API calls.
@@ -228,6 +229,29 @@ class TripService {
     return PaginatedTripsModel.fromJson(response.dataAsMap);
   }
 
+  // ── GET /api/my/joined-trips ──────────────────────────────────────────────
+
+  /// Fetch trips the current authenticated user has joined as a member.
+  ///
+  /// Excludes owned trips, pending requests, rejected/cancelled requests,
+  /// and left/removed memberships.
+  Future<PaginatedTripsModel> getMyJoinedTrips({
+    int page = 1,
+    int perPage = 15,
+  }) async {
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    };
+
+    final response = await _client.get(
+      ApiConstants.myJoinedTrips,
+      queryParams: queryParams,
+    );
+
+    return PaginatedTripsModel.fromJson(response.dataAsMap);
+  }
+
   // ── POST /api/trips/{id}/publish ──────────────────────────────────────────
 
   /// Publish a draft trip.
@@ -269,6 +293,20 @@ class TripService {
 
   /// Release resources.  Call when the service is no longer needed.
   void dispose() => _client.dispose();
+
+  // ── GET /api/trips/{trip}/members ─────────────────────────────────────────
+
+  /// Fetch active members of a trip.
+  ///
+  /// Returns only owner and active joined members.
+  Future<List<TripMemberModel>> getTripMembers(int tripId) async {
+    final response = await _client.get(ApiConstants.tripMembers(tripId));
+    final data = response.dataAsMap;
+    final list = data['members'] as List<dynamic>? ?? [];
+    return list
+        .map((e) => TripMemberModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
 
   // ── Join-request endpoints ─────────────────────────────────────────────────
 
