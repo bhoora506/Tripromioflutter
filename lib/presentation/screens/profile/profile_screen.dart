@@ -9,6 +9,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/preferred_destination_model.dart';
+import '../../../data/models/travel_availability_model.dart';
 import '../../../data/services/profile_service.dart';
 import '../../../data/services/auth_service.dart';
 import '../../../routes/app_routes.dart';
@@ -80,6 +81,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _errorMessage;
   List<PreferredDestinationModel>? _destinations;
   String? _destinationsError;
+  List<TravelAvailabilityModel>? _availabilities;
+  String? _availabilitiesError;
 
   @override
   void initState() {
@@ -115,11 +118,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         destErr = 'Failed to load destinations.';
       }
       
+      // Try to load availabilities
+      List<TravelAvailabilityModel>? availList;
+      String? availErr;
+      try {
+        availList = await _service.getTravelAvailabilities();
+      } catch (e) {
+        availErr = 'Failed to load availabilities.';
+      }
+      
       if (!mounted) return;
       setState(() {
         _user = user;
         _destinations = destList;
         _destinationsError = destErr;
+        _availabilities = availList;
+        _availabilitiesError = availErr;
       });
     } on NetworkException {
       if (!mounted) return;
@@ -170,6 +184,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (updated is List<PreferredDestinationModel> && mounted) {
       setState(() => _destinations = updated);
+    }
+  }
+
+  Future<void> _openAvailability() async {
+    final updated = await Navigator.of(context).pushNamed(
+      AppRoutes.travelAvailability,
+    );
+    if (updated is List<TravelAvailabilityModel> && mounted) {
+      setState(() => _availabilities = updated);
     }
   }
 
@@ -374,6 +397,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onEditDestinations: _openDestinations,
                       destinations: _destinations,
                       destinationsError: _destinationsError,
+                      availabilities: _availabilities,
+                      availabilitiesError: _availabilitiesError,
+                      onEditAvailability: _openAvailability,
                       onLogout: _confirmLogout,
                     ),
                     if (_isLoggingOut)
@@ -581,6 +607,9 @@ class _ProfileBody extends StatelessWidget {
     required this.onLogout,
     required this.destinations,
     required this.destinationsError,
+    required this.availabilities,
+    required this.availabilitiesError,
+    required this.onEditAvailability,
   });
 
   final UserModel user;
@@ -592,6 +621,9 @@ class _ProfileBody extends StatelessWidget {
   final VoidCallback onLogout;
   final List<PreferredDestinationModel>? destinations;
   final String? destinationsError;
+  final List<TravelAvailabilityModel>? availabilities;
+  final String? availabilitiesError;
+  final VoidCallback onEditAvailability;
 
   @override
   Widget build(BuildContext context) {
@@ -621,6 +653,11 @@ class _ProfileBody extends StatelessWidget {
           destinations: destinations, 
           error: destinationsError, 
           onEdit: onEditDestinations,
+        )),
+        SliverToBoxAdapter(child: _AvailabilitySection(
+          availabilities: availabilities,
+          error: availabilitiesError,
+          onEdit: onEditAvailability,
         )),
         SliverToBoxAdapter(child: _BudgetSection(user: user)),
         SliverToBoxAdapter(child: _AccountSection(onLogout: onLogout)),
@@ -1280,6 +1317,76 @@ class _DestinationsSection extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: destinations!.map((d) => _Tag(label: d.destination)).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Travel Availability Section
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AvailabilitySection extends StatelessWidget {
+  const _AvailabilitySection({
+    required this.availabilities,
+    required this.error,
+    required this.onEdit,
+  });
+
+  final List<TravelAvailabilityModel>? availabilities;
+  final String? error;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    if (error != null) {
+      return _Section(
+        title: 'Travel Availability',
+        icon: Icons.calendar_month_rounded,
+        onEdit: onEdit,
+        children: [
+          Text(
+            error!,
+            style: GoogleFonts.nunito(
+              fontSize: 14,
+              color: AppColors.error,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (availabilities == null || availabilities!.isEmpty) {
+      return _Section(
+        title: 'Travel Availability',
+        icon: Icons.calendar_month_rounded,
+        onEdit: onEdit,
+        children: [
+          Text(
+            'No travel dates added yet.',
+            style: GoogleFonts.nunito(
+              fontSize: 14,
+              color: AppColors.textSecondaryLight,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return _Section(
+      title: 'Travel Availability',
+      icon: Icons.calendar_month_rounded,
+      onEdit: onEdit,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: availabilities!.map((a) {
+            String format(DateTime d) => '${d.month}/${d.day}/${d.year}';
+            return _Tag(label: '${format(a.startDate)} - ${format(a.endDate)}');
+          }).toList(),
         ),
       ],
     );

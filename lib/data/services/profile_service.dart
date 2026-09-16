@@ -3,6 +3,7 @@ import '../../core/network/api_client.dart';
 import '../models/user_model.dart';
 import '../models/interest_model.dart';
 import '../models/preferred_destination_model.dart';
+import '../models/travel_availability_model.dart';
 
 /// Service for profile-related API calls.
 ///
@@ -207,6 +208,59 @@ class ProfileService {
 
   Future<void> deletePreferredDestination(int id) async {
     await _client.delete('${ApiConstants.profileDestinations}/$id');
+  }
+
+  // ── GET /api/profile/availability ─────────────────────────────────────────
+
+  Future<List<TravelAvailabilityModel>> getTravelAvailabilities() async {
+    final response = await _client.get(ApiConstants.profileAvailability);
+    final data = response.dataAsMap;
+    final list = data['availabilities'] as List<dynamic>? ?? [];
+    return list
+        .map((i) => TravelAvailabilityModel.fromJson(i as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── POST /api/profile/availability ────────────────────────────────────────
+
+  Future<TravelAvailabilityModel> addTravelAvailability(DateTime startDate, DateTime endDate) async {
+    final response = await _client.post(
+      ApiConstants.profileAvailability,
+      body: {
+        'start_date': startDate.toIso8601String().split('T').first,
+        'end_date': endDate.toIso8601String().split('T').first,
+      },
+    );
+    final data = response.dataAsMap;
+    final availJson = data['availability'] as Map<String, dynamic>?;
+    if (availJson == null) {
+      return TravelAvailabilityModel.fromJson(data);
+    }
+    return TravelAvailabilityModel.fromJson(availJson);
+  }
+
+  // ── PUT /api/profile/availability/{id} ────────────────────────────────────
+
+  Future<TravelAvailabilityModel> updateTravelAvailability(int id, DateTime startDate, DateTime endDate) async {
+    final response = await _client.put(
+      '${ApiConstants.profileAvailability}/$id',
+      body: {
+        'start_date': startDate.toIso8601String().split('T').first,
+        'end_date': endDate.toIso8601String().split('T').first,
+      },
+    );
+    final data = response.dataAsMap;
+    final availJson = data['availability'] as Map<String, dynamic>?;
+    if (availJson == null) {
+      return TravelAvailabilityModel.fromJson(data);
+    }
+    return TravelAvailabilityModel.fromJson(availJson);
+  }
+
+  // ── DELETE /api/profile/availability/{id} ─────────────────────────────────
+
+  Future<void> deleteTravelAvailability(int id) async {
+    await _client.delete('${ApiConstants.profileAvailability}/$id');
   }
 
   void dispose() => _client.dispose();
