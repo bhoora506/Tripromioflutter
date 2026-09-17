@@ -6,6 +6,7 @@ import '../presentation/screens/auth/register_screen.dart';
 import '../presentation/screens/companions/find_companions_screen.dart';
 import '../presentation/screens/companions/search_results_screen.dart';
 import '../presentation/screens/companions/companion_detail_screen.dart';
+import '../presentation/screens/connections/connection_requests_screen.dart';
 import '../presentation/screens/home/home_screen.dart';
 import '../presentation/screens/onboarding/onboarding_screen.dart';
 import '../presentation/screens/placeholder_screen.dart';
@@ -65,6 +66,7 @@ abstract final class AppRouter {
       // /trips/:tripId → TripDetailsScreen
       AppRoutes.tripDetail => const TripDetailsScreen(),
       AppRoutes.companionDetail => const CompanionDetailScreen(),
+      AppRoutes.connectionRequests => const ConnectionRequestsScreen(),
 
       // ── Future screens (placeholders) ─────────────────────────────────────
       AppRoutes.conversations => const PlaceholderScreen(label: 'Conversations'),

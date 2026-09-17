@@ -35,6 +35,9 @@ abstract final class AppRoutes {
   static const String discover = '/discover';
   static const String companionDetail = '/companions/detail';
 
+  // ── Connections ───────────────────────────────────────────────────────────
+  static const String connectionRequests = '/connections/requests';
+
   // ── Chat ──────────────────────────────────────────────────────────────────
   static const String conversations = '/conversations';
   static const String chat = '/conversations/chat';

@@ -1,6 +1,33 @@
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_client.dart';
 import '../models/connection_request_model.dart';
+import '../models/trip_model.dart' show PaginationModel;
+
+// ── Paginated Connections Response ────────────────────────────────────────────
+
+/// Wraps a paginated list of [ConnectionRequestModel] items with [PaginationModel].
+/// Matches GET /api/connections/received and GET /api/connections/sent envelopes.
+class PaginatedConnectionsModel {
+  const PaginatedConnectionsModel({
+    required this.items,
+    required this.pagination,
+  });
+
+  final List<ConnectionRequestModel> items;
+  final PaginationModel pagination;
+
+  factory PaginatedConnectionsModel.fromJson(Map<String, dynamic> json) {
+    final itemsList = json['items'] as List<dynamic>? ?? [];
+    final paginationJson =
+        json['pagination'] as Map<String, dynamic>? ?? <String, dynamic>{};
+    return PaginatedConnectionsModel(
+      items: itemsList
+          .map((i) => ConnectionRequestModel.fromJson(i as Map<String, dynamic>))
+          .toList(),
+      pagination: PaginationModel.fromJson(paginationJson),
+    );
+  }
+}
 
 /// Service for connection request API calls (F2 endpoints).
 ///
@@ -16,6 +43,40 @@ class ConnectionService {
   ConnectionService({ApiClient? client}) : _client = client ?? ApiClient();
 
   final ApiClient _client;
+
+  // ── GET /api/connections/received ────────────────────────────────────────────
+
+  /// Fetch paginated connection requests received by the authenticated user.
+  Future<PaginatedConnectionsModel> getReceivedRequests({
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    final response = await _client.get(
+      ApiConstants.connectionsReceived,
+      queryParams: {
+        'page': page.toString(),
+        'per_page': perPage.toString(),
+      },
+    );
+    return PaginatedConnectionsModel.fromJson(response.dataAsMap);
+  }
+
+  // ── GET /api/connections/sent ─────────────────────────────────────────────
+
+  /// Fetch paginated connection requests sent by the authenticated user.
+  Future<PaginatedConnectionsModel> getSentRequests({
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    final response = await _client.get(
+      ApiConstants.connectionsSent,
+      queryParams: {
+        'page': page.toString(),
+        'per_page': perPage.toString(),
+      },
+    );
+    return PaginatedConnectionsModel.fromJson(response.dataAsMap);
+  }
 
   // ── POST /api/connections ─────────────────────────────────────────────────
 

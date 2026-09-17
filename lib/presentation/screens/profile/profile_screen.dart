@@ -1432,37 +1432,80 @@ class _AccountSection extends StatelessWidget {
             ),
             child: Material(
               color: Colors.transparent,
-              child: InkWell(
-                onTap: onLogout,
-                borderRadius: BorderRadius.circular(20),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.logout_rounded,
-                            color: AppColors.error, size: 20),
+              child: Column(
+                children: [
+                  InkWell(
+                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.connectionRequests),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.people_alt_rounded,
+                                color: AppColors.primary, size: 20),
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            'Connection Requests',
+                            style: GoogleFonts.nunito(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimaryLight,
+                            ),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.chevron_right_rounded,
+                              color: AppColors.textSecondaryLight, size: 20),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      Text(
-                        'Log out',
-                        style: GoogleFonts.nunito(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.error,
-                        ),
-                      ),
-                      const Spacer(),
-                      const Icon(Icons.chevron_right_rounded,
-                          color: AppColors.error, size: 20),
-                    ],
+                    ),
                   ),
-                ),
+                  const Divider(height: 1, color: AppColors.borderLight),
+                  InkWell(
+                    onTap: onLogout,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(20),
+                      bottomRight: Radius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.logout_rounded,
+                                color: AppColors.error, size: 20),
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            'Log out',
+                            style: GoogleFonts.nunito(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.error,
+                            ),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.chevron_right_rounded,
+                              color: AppColors.error, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
