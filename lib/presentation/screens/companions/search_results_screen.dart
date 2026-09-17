@@ -5,16 +5,20 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../data/models/trip_model.dart';
-import '../../../data/services/trip_service.dart';
+import '../../../data/models/companion_model.dart';
+import '../../../data/services/companion_service.dart';
 import '../../../routes/app_routes.dart';
-import '../../widgets/trip_card.dart';
 import 'find_companions_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SearchResultsScreen (Discover)
+// CompanionDiscoveryScreen — replaces SearchResultsScreen for /discover route
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Real companion discovery feed powered by GET /api/companions.
+///
+/// Receives optional [CompanionSearchArgs] from [FindCompanionsScreen].
+/// Supports: initial load, pull-to-refresh, infinite scroll / load-more,
+/// loading / empty / error / pagination-error states.
 class SearchResultsScreen extends StatefulWidget {
   const SearchResultsScreen({super.key});
 
@@ -23,19 +27,20 @@ class SearchResultsScreen extends StatefulWidget {
 }
 
 class _SearchResultsScreenState extends State<SearchResultsScreen> {
-  final _tripService = TripService();
+  final _service = CompanionService();
   final _scrollController = ScrollController();
 
-  List<TripModel> _trips = [];
+  List<CompanionModel> _companions = [];
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
   int _currentPage = 1;
   String? _errorMessage;
+  String? _paginationError;
 
-  SearchArgs? get _args {
+  CompanionSearchArgs? get _args {
     final args = ModalRoute.of(context)?.settings.arguments;
-    return args is SearchArgs ? args : null;
+    return args is CompanionSearchArgs ? args : null;
   }
 
   @override
@@ -47,7 +52,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_loading && _trips.isEmpty && _errorMessage == null) {
+    if (_loading && _companions.isEmpty && _errorMessage == null) {
       _load();
     }
   }
@@ -55,77 +60,54 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
-    _tripService.dispose();
+    _service.dispose();
     super.dispose();
   }
 
   void _onScroll() {
     if (_loadingMore || !_hasMore) return;
     if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
+        _scrollController.position.maxScrollExtent - 250) {
       _loadMore();
     }
-  }
-
-  String _dateToApi(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-  void _parseBudget(String? budgetStr, void Function(double? min, double? max) cb) {
-    if (budgetStr == null) {
-      cb(null, null);
-      return;
-    }
-    if (budgetStr == 'Under Rs.500') { cb(null, 500); }
-    else if (budgetStr == 'Rs.500 - Rs.1,000') { cb(500, 1000); }
-    else if (budgetStr == 'Rs.1,000 - Rs.3,000') { cb(1000, 3000); }
-    else if (budgetStr == 'Rs.3,000 - Rs.8,000') { cb(3000, 8000); }
-    else if (budgetStr == 'Rs.8,000 - Rs.20,000') { cb(8000, 20000); }
-    else if (budgetStr == 'Rs.20,000+') { cb(20000, null); }
-    else { cb(null, null); }
   }
 
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _errorMessage = null;
+      _paginationError = null;
       _currentPage = 1;
+      _companions = [];
     });
 
     try {
       final args = _args;
-      String? startDate;
-      String? endDate;
-      if (args?.dateRange != null) {
-        startDate = _dateToApi(args!.dateRange!.start);
-        endDate = _dateToApi(args.dateRange!.end);
-      }
-      
-      double? bMin;
-      double? bMax;
-      _parseBudget(args?.budget, (min, max) {
-        bMin = min;
-        bMax = max;
-      });
-
-      final result = await _tripService.getTrips(
+      final result = await _service.getCompanions(
         page: 1,
-        destination: args?.destination.isNotEmpty == true ? args?.destination : null,
-        startDate: startDate,
-        endDate: endDate,
-        budgetMin: bMin,
-        budgetMax: bMax,
+        destination: args?.destination,
+        startDate: args?.dateRange?.start,
+        endDate: args?.dateRange?.end,
+        travelStyle: args?.travelStyle,
+        sort: args?.sort,
       );
-      
+
       if (!mounted) return;
       setState(() {
-        _trips = result.items;
-        _hasMore = result.pagination.currentPage < result.pagination.lastPage;
+        _companions = result.items;
+        _hasMore = result.pagination.hasMore;
         _loading = false;
       });
     } on NetworkException {
       if (!mounted) return;
       setState(() {
         _errorMessage = 'No internet connection. Please retry.';
+        _loading = false;
+      });
+    } on UnauthorizedException {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Session expired. Please log in again.';
         _loading = false;
       });
     } on ApiException catch (e) {
@@ -145,52 +127,69 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
-    setState(() => _loadingMore = true);
+    setState(() {
+      _loadingMore = true;
+      _paginationError = null;
+    });
 
     try {
       final nextPage = _currentPage + 1;
-      
       final args = _args;
-      String? startDate;
-      String? endDate;
-      if (args?.dateRange != null) {
-        startDate = _dateToApi(args!.dateRange!.start);
-        endDate = _dateToApi(args.dateRange!.end);
-      }
-      
-      double? bMin;
-      double? bMax;
-      _parseBudget(args?.budget, (min, max) {
-        bMin = min;
-        bMax = max;
-      });
-
-      final result = await _tripService.getTrips(
+      final result = await _service.getCompanions(
         page: nextPage,
-        destination: args?.destination.isNotEmpty == true ? args?.destination : null,
-        startDate: startDate,
-        endDate: endDate,
-        budgetMin: bMin,
-        budgetMax: bMax,
+        destination: args?.destination,
+        startDate: args?.dateRange?.start,
+        endDate: args?.dateRange?.end,
+        travelStyle: args?.travelStyle,
+        sort: args?.sort,
       );
 
       if (!mounted) return;
       setState(() {
-        _trips.addAll(result.items);
+        _companions.addAll(result.items);
         _currentPage = nextPage;
-        _hasMore = result.pagination.currentPage < result.pagination.lastPage;
+        _hasMore = result.pagination.hasMore;
         _loadingMore = false;
       });
+    } on NetworkException {
+      if (!mounted) return;
+      setState(() {
+        _loadingMore = false;
+        _paginationError = 'No internet. Tap to retry.';
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingMore = false;
+        _paginationError = e.message;
+      });
     } catch (_) {
-      if (mounted) setState(() => _loadingMore = false);
+      if (!mounted) return;
+      setState(() {
+        _loadingMore = false;
+        _paginationError = 'Failed to load more. Tap to retry.';
+      });
     }
   }
 
-  void _onCardTap(TripModel trip) {
+  void _openDetail(CompanionModel companion) {
     Navigator.of(context).pushNamed(
-      AppRoutes.tripDetail,
-      arguments: trip.id,
+      AppRoutes.companionDetail,
+      arguments: companion,
     );
+  }
+
+  String _buildSubtitle(CompanionSearchArgs? args) {
+    final parts = <String>[];
+    if (args?.destination != null && args!.destination!.isNotEmpty) {
+      parts.add(args.destination!);
+    }
+    if (args?.travelStyle != null) {
+      parts.add(args!.travelStyle!.replaceAll('_', ' ').toUpperCase()[0] +
+          args.travelStyle!.replaceAll('_', ' ').substring(1));
+    }
+    if (parts.isEmpty) return 'All companions';
+    return parts.join(' · ');
   }
 
   @override
@@ -200,73 +199,138 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       statusBarIconBrightness: Brightness.dark,
     ));
 
+    final topPad = MediaQuery.paddingOf(context).top;
     final args = _args;
-    final destination = args?.destination.isNotEmpty == true ? args!.destination : 'Discover';
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: Column(
         children: [
-          _SrHeader(destination: destination, args: args),
+          // ── Header ────────────────────────────────────────────────────────
+          Container(
+            padding: EdgeInsets.fromLTRB(
+              AppConstants.screenPaddingH,
+              topPad + AppConstants.spacingMd,
+              AppConstants.screenPaddingH,
+              AppConstants.spacingLg,
+            ),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF0A1628), Color(0xFF0F3460)],
+              ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(AppConstants.radiusXl),
+                bottomRight: Radius.circular(AppConstants.radiusXl),
+              ),
+            ),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white, size: 17),
+                  ),
+                ),
+                const SizedBox(width: AppConstants.spacingMd),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Travel Companions',
+                        style: GoogleFonts.nunito(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        _buildSubtitle(args),
+                        style: GoogleFonts.nunito(
+                          fontSize: 13,
+                          color: Colors.white.withValues(alpha: 0.68),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () async {
+                    // Go back to filter screen
+                    Navigator.of(context).pop();
+                  },
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.tune_rounded,
+                        color: Colors.white, size: 18),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Body ──────────────────────────────────────────────────────────
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _errorMessage != null
-                    ? _ErrorView(message: _errorMessage!, onRetry: _load)
-                    : _trips.isEmpty
-                        ? const _EmptyState()
+                    ? _ErrorState(
+                        message: _errorMessage!,
+                        onRetry: _load,
+                      )
+                    : _companions.isEmpty
+                        ? _EmptyState(
+                            hasFilters: args != null &&
+                                (args.destination != null ||
+                                    args.travelStyle != null ||
+                                    args.dateRange != null),
+                            onClearFilters: () {
+                              Navigator.of(context).pop();
+                            },
+                          )
                         : RefreshIndicator(
-                            color: AppColors.primary,
                             onRefresh: _load,
                             child: ListView.builder(
                               controller: _scrollController,
-                              padding: EdgeInsets.fromLTRB(
-                                AppConstants.screenPaddingH,
-                                AppConstants.spacingMd,
-                                AppConstants.screenPaddingH,
-                                MediaQuery.paddingOf(context).bottom + AppConstants.spacingLg,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppConstants.screenPaddingH,
+                                vertical: AppConstants.spacingMd,
                               ),
-                              itemCount: _trips.length + (_loadingMore ? 1 : 0),
+                              itemCount:
+                                  _companions.length + (_hasMore || _paginationError != null ? 1 : 0),
                               itemBuilder: (context, index) {
-                                if (index == _trips.length) {
-                                  return const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 16),
-                                    child: Center(
-                                      child: SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      ),
-                                    ),
+                                if (index == _companions.length) {
+                                  // Pagination footer
+                                  if (_paginationError != null) {
+                                    return _PaginationError(
+                                      message: _paginationError!,
+                                      onRetry: _loadMore,
+                                    );
+                                  }
+                                  return _PaginationLoader(
+                                    isLoading: _loadingMore,
                                   );
                                 }
 
-                                if (index == 0) {
-                                  return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.only(bottom: AppConstants.spacingMd),
-                                        child: Text(
-                                          '${_trips.length}${_hasMore ? '+' : ''} trips found',
-                                          style: GoogleFonts.nunito(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textSecondaryLight,
-                                          ),
-                                        ),
-                                      ),
-                                      TripCard(
-                                        data: TripCardData.fromTripModel(_trips[index]),
-                                        onTap: () => _onCardTap(_trips[index]),
-                                      ),
-                                    ],
-                                  );
-                                }
-
-                                return TripCard(
-                                  data: TripCardData.fromTripModel(_trips[index]),
-                                  onTap: () => _onCardTap(_trips[index]),
+                                return CompanionCard(
+                                  companion: _companions[index],
+                                  onTap: () => _openDetail(_companions[index]),
                                 );
                               },
                             ),
@@ -278,177 +342,294 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   }
 }
 
-// ── Header ────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// CompanionCard — reusable companion card widget
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _SrHeader extends StatelessWidget {
-  const _SrHeader({required this.destination, required this.args});
-  final String destination;
-  final SearchArgs? args;
+/// Displays discovery-safe companion info. Does NOT show email, budget,
+/// profile_completion, or any unsupported backend fields.
+class CompanionCard extends StatelessWidget {
+  const CompanionCard({
+    super.key,
+    required this.companion,
+    required this.onTap,
+  });
+
+  final CompanionModel companion;
+  final VoidCallback onTap;
+
+  static const Map<String, String> _styleLabels = {
+    'adventure': '🏔️ Adventure',
+    'backpacking': '🎒 Backpacking',
+    'budget': '💰 Budget',
+    'luxury': '✨ Luxury',
+    'relaxed': '🌴 Relaxed',
+    'road_trip': '🚗 Road Trip',
+    'nature': '🌿 Nature',
+    'cultural': '🏛️ Cultural',
+  };
 
   @override
   Widget build(BuildContext context) {
-    final topPad = MediaQuery.paddingOf(context).top;
-    final dateStr = args?.dateRange != null
-        ? '${args!.dateRange!.start.day}/${args!.dateRange!.start.month} – ${args!.dateRange!.end.day}/${args!.dateRange!.end.month}'
-        : 'Any dates';
+    final photoUrl = _resolvePhotoUrl(companion.profilePhotoUrl);
+    final styleLabel = _styleLabels[companion.travelStyle] ?? companion.travelStyle;
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        AppConstants.screenPaddingH,
-        topPad + AppConstants.spacingMd,
-        AppConstants.screenPaddingH,
-        AppConstants.spacingLg,
-      ),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0A1628), Color(0xFF0F3460)],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(AppConstants.radiusXl),
-          bottomRight: Radius.circular(AppConstants.radiusXl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Top row: avatar + name/location ─────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Avatar
+                  _Avatar(photoUrl: photoUrl, name: companion.name, size: 56),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          companion.name,
+                          style: GoogleFonts.nunito(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimaryLight,
+                          ),
+                        ),
+                        if (companion.location != null) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on_rounded,
+                                  size: 13, color: AppColors.primary),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  companion.location!,
+                                  style: GoogleFonts.nunito(
+                                    fontSize: 13,
+                                    color: AppColors.textSecondaryLight,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (styleLabel != null) ...[
+                          const SizedBox(height: 6),
+                          _StyleChip(label: styleLabel),
+                        ],
+                      ],
+                    ),
+                  ),
+                  // Chevron
+                  const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.textSecondaryLight, size: 22),
+                ],
+              ),
+            ),
+
+            // ── Bio ──────────────────────────────────────────────────────────
+            if (companion.bio != null && companion.bio!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Text(
+                  companion.bio!,
+                  style: GoogleFonts.nunito(
+                    fontSize: 13,
+                    color: AppColors.textSecondaryLight,
+                    height: 1.5,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+
+            // ── Interests ────────────────────────────────────────────────────
+            if (companion.interests.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: companion.interests
+                      .take(4)
+                      .map((i) => _InterestChip(name: i.name))
+                      .toList(),
+                ),
+              ),
+
+            // ── Preferred Destinations ────────────────────────────────────────
+            if (companion.preferredDestinations.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.place_rounded,
+                        size: 14, color: AppColors.textSecondaryLight),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        companion.preferredDestinations
+                            .take(3)
+                            .map((d) => d.destination)
+                            .join(' · '),
+                        style: GoogleFonts.nunito(
+                          fontSize: 12,
+                          color: AppColors.textSecondaryLight,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Back row
-          Row(children: [
-            GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    shape: BoxShape.circle),
-                child: const Icon(Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white, size: 17),
-              ),
-            ),
-            const SizedBox(width: AppConstants.spacingMd),
-            Expanded(
-              child: Text(
-                'Search Results',
-                style: GoogleFonts.nunito(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white),
-              ),
-            ),
-          ]),
-
-          const SizedBox(height: AppConstants.spacingMd),
-
-          // Destination
-          Row(children: [
-            const Icon(Icons.location_on_rounded,
-                color: AppColors.primaryLight, size: 18),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                destination,
-                style: GoogleFonts.nunito(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.3),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 6),
-
-          // Chips row
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
-              _InfoChip(icon: Icons.calendar_today_rounded, label: dateStr),
-              if (args?.lookingFor != null) ...[
-                const SizedBox(width: AppConstants.spacingSm),
-                _InfoChip(
-                    icon: Icons.people_outline_rounded,
-                    label: args!.lookingFor!),
-              ],
-              if (args?.budget != null) ...[
-                const SizedBox(width: AppConstants.spacingSm),
-                _InfoChip(
-                    icon: Icons.account_balance_wallet_outlined,
-                    label: args!.budget!),
-              ]
-            ]),
-          ),
-        ],
       ),
     );
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.label});
-  final IconData icon;
+// ─────────────────────────────────────────────────────────────────────────────
+// Private shared widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({
+    required this.photoUrl,
+    required this.name,
+    required this.size,
+  });
+
+  final String? photoUrl;
+  final String name;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    if (photoUrl != null && photoUrl!.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          photoUrl!,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _FallbackAvatar(initial: initial, size: size),
+        ),
+      );
+    }
+    return _FallbackAvatar(initial: initial, size: size);
+  }
+}
+
+class _FallbackAvatar extends StatelessWidget {
+  const _FallbackAvatar({required this.initial, required this.size});
+  final String initial;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: AppColors.primaryGradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: GoogleFonts.nunito(
+            fontSize: size * 0.38,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StyleChip extends StatelessWidget {
+  const _StyleChip({required this.label});
   final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
+        color: AppColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
       ),
-      child: Row(children: [
-        Icon(icon, size: 12, color: Colors.white.withValues(alpha: 0.80)),
-        const SizedBox(width: 5),
-        Text(label,
-            style: GoogleFonts.nunito(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.white.withValues(alpha: 0.88))),
-      ]),
+      child: Text(
+        label,
+        style: GoogleFonts.nunito(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: AppColors.primary,
+        ),
+      ),
     );
   }
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+class _InterestChip extends StatelessWidget {
+  const _InterestChip({required this.name});
+  final String name;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 88,
-          height: 88,
-          decoration: BoxDecoration(
-            color: AppColors.backgroundLight,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.borderLight, width: 2),
-          ),
-          child: const Icon(Icons.flight_takeoff_rounded,
-              size: 40, color: AppColors.textSecondaryLight),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLight,
+        borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Text(
+        name,
+        style: GoogleFonts.nunito(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textSecondaryLight,
         ),
-        const SizedBox(height: AppConstants.spacingMd),
-        Text('No trips found',
-            style: GoogleFonts.nunito(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimaryLight)),
-        const SizedBox(height: 6),
-        Text('Try adjusting your search filters',
-            style: GoogleFonts.nunito(
-                fontSize: 14, color: AppColors.textSecondaryLight)),
-      ]),
+      ),
     );
   }
 }
 
-// ── Error state ───────────────────────────────────────────────────────────────
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
   final String message;
   final VoidCallback onRetry;
 
@@ -482,4 +663,126 @@ class _ErrorView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.hasFilters, required this.onClearFilters});
+  final bool hasFilters;
+  final VoidCallback onClearFilters;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.05),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.people_outline_rounded,
+                  size: 48, color: AppColors.primary),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'No companions found',
+              style: GoogleFonts.nunito(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimaryLight,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              hasFilters
+                  ? 'Try adjusting your filters to discover more travel partners.'
+                  : 'No discoverable companions available at this time.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.nunito(
+                fontSize: 14,
+                color: AppColors.textSecondaryLight,
+              ),
+            ),
+            if (hasFilters) ...[
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: onClearFilters,
+                icon: const Icon(Icons.tune_rounded, size: 16),
+                label: const Text('Adjust Filters'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PaginationLoader extends StatelessWidget {
+  const _PaginationLoader({required this.isLoading});
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Center(
+        child: isLoading
+            ? const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              )
+            : const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+class _PaginationError extends StatelessWidget {
+  const _PaginationError({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(
+            child: Text(
+              message,
+              style: GoogleFonts.nunito(
+                  fontSize: 13, color: AppColors.textSecondaryLight),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(width: 12),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Resolves a profile photo URL from the backend.
+/// Handles null, relative paths, and absolute URLs.
+String? _resolvePhotoUrl(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  // Relative path — not expected from backend but guard anyway.
+  return null;
 }

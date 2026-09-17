@@ -5,6 +5,7 @@ import '../presentation/screens/auth/login_screen.dart';
 import '../presentation/screens/auth/register_screen.dart';
 import '../presentation/screens/companions/find_companions_screen.dart';
 import '../presentation/screens/companions/search_results_screen.dart';
+import '../presentation/screens/companions/companion_detail_screen.dart';
 import '../presentation/screens/home/home_screen.dart';
 import '../presentation/screens/onboarding/onboarding_screen.dart';
 import '../presentation/screens/placeholder_screen.dart';
@@ -63,9 +64,9 @@ abstract final class AppRouter {
       AppRoutes.discover => const SearchResultsScreen(),
       // /trips/:tripId → TripDetailsScreen
       AppRoutes.tripDetail => const TripDetailsScreen(),
+      AppRoutes.companionDetail => const CompanionDetailScreen(),
 
       // ── Future screens (placeholders) ─────────────────────────────────────
-      AppRoutes.matchDetail => const PlaceholderScreen(label: 'Match Detail'),
       AppRoutes.conversations => const PlaceholderScreen(label: 'Conversations'),
       AppRoutes.chat => const PlaceholderScreen(label: 'Chat'),
 

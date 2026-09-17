@@ -6,19 +6,40 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../routes/app_routes.dart';
 
-/// Arguments passed from FindCompanionsScreen to SearchResultsScreen.
-class SearchArgs {
-  const SearchArgs({
-    required this.destination,
+/// Arguments passed from [FindCompanionsScreen] to [CompanionDiscoveryScreen].
+///
+/// Only fields supported by GET /api/companions (CompanionDiscoveryRequest).
+class CompanionSearchArgs {
+  const CompanionSearchArgs({
+    this.destination,
     this.dateRange,
-    this.budget,
-    this.lookingFor,
+    this.travelStyle,
+    this.sort,
   });
-  final String destination;
+
+  final String? destination;
   final DateTimeRange? dateRange;
-  final String? budget;
-  final String? lookingFor;
+  final String? travelStyle;
+  final String? sort;
 }
+
+/// Travel style options supported by the backend TravelStyle enum.
+const List<Map<String, String>> kTravelStyleOptions = [
+  {'value': 'adventure', 'label': '🏔️ Adventure'},
+  {'value': 'backpacking', 'label': '🎒 Backpacking'},
+  {'value': 'budget', 'label': '💰 Budget'},
+  {'value': 'luxury', 'label': '✨ Luxury'},
+  {'value': 'relaxed', 'label': '🌴 Relaxed'},
+  {'value': 'road_trip', 'label': '🚗 Road Trip'},
+  {'value': 'nature', 'label': '🌿 Nature'},
+  {'value': 'cultural', 'label': '🏛️ Cultural'},
+];
+
+/// Sort options supported by the backend CompanionDiscoveryRequest.
+const List<Map<String, String>> kSortOptions = [
+  {'value': 'profile_completion', 'label': 'Best Profiles'},
+  {'value': 'newest', 'label': 'Newest'},
+];
 
 class FindCompanionsScreen extends StatefulWidget {
   const FindCompanionsScreen({super.key});
@@ -30,26 +51,8 @@ class FindCompanionsScreen extends StatefulWidget {
 class _FindCompanionsScreenState extends State<FindCompanionsScreen> {
   final _destinationController = TextEditingController();
   DateTimeRange? _dateRange;
-  TimeOfDay? _departureTime;
-  String? _selectedBudget;
-  String? _selectedLookingFor;
-
-  static const _budgetOptions = [
-    'Under Rs.500',
-    'Rs.500 - Rs.1,000',
-    'Rs.1,000 - Rs.3,000',
-    'Rs.3,000 - Rs.8,000',
-    'Rs.8,000 - Rs.20,000',
-    'Rs.20,000+',
-  ];
-
-  static const _lookingForOptions = [
-    'Solo traveller',
-    'Couple',
-    'Small group (3-5)',
-    'Large group (6+)',
-    'Family-friendly',
-  ];
+  String? _selectedTravelStyle;
+  String? _selectedSort;
 
   @override
   void dispose() {
@@ -62,7 +65,7 @@ class _FindCompanionsScreenState extends State<FindCompanionsScreen> {
     final picked = await showDateRangePicker(
       context: context,
       firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365 * 2)),
       initialDateRange: _dateRange ??
           DateTimeRange(start: now, end: now.add(const Duration(days: 3))),
       builder: (ctx, child) => Theme(
@@ -79,28 +82,11 @@ class _FindCompanionsScreenState extends State<FindCompanionsScreen> {
     if (picked != null && mounted) setState(() => _dateRange = picked);
   }
 
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _departureTime ?? TimeOfDay.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: AppColors.primary,
-            onPrimary: Colors.white,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null && mounted) setState(() => _departureTime = picked);
-  }
-
-  void _showPicker({
+  void _showStringPicker({
     required String title,
-    required List<String> options,
-    required String? selected,
-    required ValueChanged<String> onSelect,
+    required List<Map<String, String>> options,
+    required String? selectedValue,
+    required ValueChanged<String?> onSelect,
   }) {
     showModalBottomSheet<void>(
       context: context,
@@ -112,11 +98,12 @@ class _FindCompanionsScreenState extends State<FindCompanionsScreen> {
       builder: (_) => _OptionsSheet(
         title: title,
         options: options,
-        selected: selected,
+        selectedValue: selectedValue,
         onSelect: (val) {
           onSelect(val);
           Navigator.pop(context);
         },
+        allowClear: true,
       ),
     );
   }
@@ -125,11 +112,11 @@ class _FindCompanionsScreenState extends State<FindCompanionsScreen> {
     final dest = _destinationController.text.trim();
     Navigator.of(context).pushNamed(
       AppRoutes.discover,
-      arguments: SearchArgs(
-        destination: dest.isEmpty ? 'Any destination' : dest,
+      arguments: CompanionSearchArgs(
+        destination: dest.isEmpty ? null : dest,
         dateRange: _dateRange,
-        budget: _selectedBudget,
-        lookingFor: _selectedLookingFor,
+        travelStyle: _selectedTravelStyle,
+        sort: _selectedSort,
       ),
     );
   }
@@ -143,18 +130,25 @@ class _FindCompanionsScreenState extends State<FindCompanionsScreen> {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     if (s.month == e.month && s.year == e.year) {
-      return '${s.day} - ${e.day} ${mo[s.month]}';
+      return '${s.day} – ${e.day} ${mo[s.month]}';
     }
-    return '${s.day} ${mo[s.month]} - ${e.day} ${mo[e.month]}';
+    return '${s.day} ${mo[s.month]} – ${e.day} ${mo[e.month]}';
   }
 
-  String _fmtTime() {
-    if (_departureTime == null) return 'Select departure time';
-    final h =
-        _departureTime!.hourOfPeriod == 0 ? 12 : _departureTime!.hourOfPeriod;
-    final m = _departureTime!.minute.toString().padLeft(2, '0');
-    final p = _departureTime!.period == DayPeriod.am ? 'AM' : 'PM';
-    return '$h:$m $p';
+  String _styleLabel(String? value) {
+    if (value == null) return 'Any travel style';
+    return kTravelStyleOptions
+            .firstWhere((o) => o['value'] == value,
+                orElse: () => {'label': value})['label'] ??
+        value;
+  }
+
+  String _sortLabel(String? value) {
+    if (value == null) return 'Best Profiles (default)';
+    return kSortOptions
+            .firstWhere((o) => o['value'] == value,
+                orElse: () => {'label': value})['label'] ??
+        value;
   }
 
   @override
@@ -194,46 +188,46 @@ class _FindCompanionsScreenState extends State<FindCompanionsScreen> {
                     value: _fmtDates(),
                     hasValue: _dateRange != null,
                     onTap: _pickDateRange,
+                    onClear: _dateRange != null
+                        ? () => setState(() => _dateRange = null)
+                        : null,
                   ),
 
                   const SizedBox(height: AppConstants.spacingMd),
-                  const _Label('Departure Time'),
+                  const _Label('Travel Style'),
                   const SizedBox(height: AppConstants.spacingXs),
                   _TapField(
-                    icon: Icons.schedule_rounded,
-                    value: _fmtTime(),
-                    hasValue: _departureTime != null,
-                    onTap: _pickTime,
-                  ),
-
-                  const SizedBox(height: AppConstants.spacingMd),
-                  const _Label('Budget Range'),
-                  const SizedBox(height: AppConstants.spacingXs),
-                  _TapField(
-                    icon: Icons.account_balance_wallet_outlined,
-                    value: _selectedBudget ?? 'Select budget range',
-                    hasValue: _selectedBudget != null,
-                    onTap: () => _showPicker(
-                      title: 'Select Budget Range',
-                      options: _budgetOptions,
-                      selected: _selectedBudget,
-                      onSelect: (v) => setState(() => _selectedBudget = v),
+                    icon: Icons.backpack_rounded,
+                    value: _styleLabel(_selectedTravelStyle),
+                    hasValue: _selectedTravelStyle != null,
+                    onTap: () => _showStringPicker(
+                      title: 'Travel Style',
+                      options: kTravelStyleOptions,
+                      selectedValue: _selectedTravelStyle,
+                      onSelect: (v) =>
+                          setState(() => _selectedTravelStyle = v),
                     ),
+                    onClear: _selectedTravelStyle != null
+                        ? () => setState(() => _selectedTravelStyle = null)
+                        : null,
                   ),
 
                   const SizedBox(height: AppConstants.spacingMd),
-                  const _Label('Looking For'),
+                  const _Label('Sort By'),
                   const SizedBox(height: AppConstants.spacingXs),
                   _TapField(
-                    icon: Icons.people_outline_rounded,
-                    value: _selectedLookingFor ?? 'Who are you looking for?',
-                    hasValue: _selectedLookingFor != null,
-                    onTap: () => _showPicker(
-                      title: 'Looking For',
-                      options: _lookingForOptions,
-                      selected: _selectedLookingFor,
-                      onSelect: (v) => setState(() => _selectedLookingFor = v),
+                    icon: Icons.sort_rounded,
+                    value: _sortLabel(_selectedSort),
+                    hasValue: _selectedSort != null,
+                    onTap: () => _showStringPicker(
+                      title: 'Sort By',
+                      options: kSortOptions,
+                      selectedValue: _selectedSort,
+                      onSelect: (v) => setState(() => _selectedSort = v),
                     ),
+                    onClear: _selectedSort != null
+                        ? () => setState(() => _selectedSort = null)
+                        : null,
                   ),
 
                   const SizedBox(height: AppConstants.spacingXl),
@@ -402,12 +396,14 @@ class _TapField extends StatelessWidget {
     required this.value,
     required this.hasValue,
     required this.onTap,
+    this.onClear,
   });
 
   final IconData icon;
   final String value;
   final bool hasValue;
   final VoidCallback onTap;
+  final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
@@ -446,8 +442,15 @@ class _TapField extends StatelessWidget {
               ),
             ),
           ),
-          const Icon(Icons.keyboard_arrow_down_rounded,
-              color: AppColors.textSecondaryLight, size: 20),
+          if (onClear != null)
+            GestureDetector(
+              onTap: onClear,
+              child: const Icon(Icons.close_rounded,
+                  color: AppColors.textSecondaryLight, size: 18),
+            )
+          else
+            const Icon(Icons.keyboard_arrow_down_rounded,
+                color: AppColors.textSecondaryLight, size: 20),
         ]),
       ),
     );
@@ -498,14 +501,16 @@ class _OptionsSheet extends StatelessWidget {
   const _OptionsSheet({
     required this.title,
     required this.options,
-    required this.selected,
+    required this.selectedValue,
     required this.onSelect,
+    this.allowClear = false,
   });
 
   final String title;
-  final List<String> options;
-  final String? selected;
-  final ValueChanged<String> onSelect;
+  final List<Map<String, String>> options;
+  final String? selectedValue;
+  final ValueChanged<String?> onSelect;
+  final bool allowClear;
 
   @override
   Widget build(BuildContext context) {
@@ -537,16 +542,40 @@ class _OptionsSheet extends StatelessWidget {
                     color: AppColors.textPrimaryLight)),
           ),
           const SizedBox(height: AppConstants.spacingMd),
-          ...options.map((opt) {
-            final sel = opt == selected;
-            return InkWell(
-              onTap: () => onSelect(opt),
+          if (allowClear && selectedValue != null) ...[
+            InkWell(
+              onTap: () => onSelect(null),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                     horizontal: AppConstants.screenPaddingH, vertical: 13),
                 child: Row(children: [
                   Expanded(
-                    child: Text(opt,
+                    child: Text('Clear selection',
+                        style: GoogleFonts.nunito(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondaryLight,
+                        )),
+                  ),
+                  const Icon(Icons.clear_rounded,
+                      color: AppColors.textSecondaryLight, size: 18),
+                ]),
+              ),
+            ),
+            const Divider(height: 1),
+          ],
+          ...options.map((opt) {
+            final val = opt['value']!;
+            final label = opt['label']!;
+            final sel = val == selectedValue;
+            return InkWell(
+              onTap: () => onSelect(val),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.screenPaddingH, vertical: 13),
+                child: Row(children: [
+                  Expanded(
+                    child: Text(label,
                         style: GoogleFonts.nunito(
                           fontSize: 15,
                           fontWeight: sel ? FontWeight.w700 : FontWeight.w500,

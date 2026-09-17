@@ -33,7 +33,7 @@ abstract final class AppRoutes {
   static const String findCompanions = '/find-companions';
   static const String searchResults = '/find-companions/results';
   static const String discover = '/discover';
-  static const String matchDetail = '/discover/match';
+  static const String companionDetail = '/companions/detail';
 
   // ── Chat ──────────────────────────────────────────────────────────────────
   static const String conversations = '/conversations';

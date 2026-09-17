@@ -78,4 +78,25 @@ abstract final class ApiConstants {
   /// POST   /api/trips/{trip}/join-requests/{jr}/cancel
   static String tripJoinRequestAction(int tripId, int joinRequestId, String action) =>
       '/trips/$tripId/join-requests/$joinRequestId/$action';
+
+  // ── Companion discovery ────────────────────────────────────────────────────
+
+  /// GET /api/companions
+  static const String companions = '/companions';
+
+  // ── Connection request endpoints ───────────────────────────────────────────
+
+  /// POST /api/connections         (send connection request)
+  /// GET  /api/connections/received
+  /// GET  /api/connections/sent
+  static const String connections = '/connections';
+  static const String connectionsReceived = '/connections/received';
+  static const String connectionsSent = '/connections/sent';
+
+  /// POST /api/connections/{id}/accept
+  /// POST /api/connections/{id}/reject
+  /// POST /api/connections/{id}/cancel
+  static String connectionAction(int id, String action) =>
+      '/connections/$id/$action';
 }
+
