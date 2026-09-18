@@ -1471,6 +1471,38 @@ class _AccountSection extends StatelessWidget {
                   ),
                   const Divider(height: 1, color: AppColors.borderLight),
                   InkWell(
+                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.myConnections),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.handshake_rounded,
+                                color: AppColors.primary, size: 20),
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            'My Connections',
+                            style: GoogleFonts.nunito(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimaryLight,
+                            ),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.chevron_right_rounded,
+                              color: AppColors.textSecondaryLight, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1, color: AppColors.borderLight),
+                  InkWell(
                     onTap: onLogout,
                     borderRadius: const BorderRadius.only(
                       bottomLeft: Radius.circular(20),

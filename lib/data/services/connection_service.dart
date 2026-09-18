@@ -1,5 +1,6 @@
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_client.dart';
+import '../models/companion_model.dart' show PaginatedCompanionsModel;
 import '../models/connection_request_model.dart';
 import '../models/trip_model.dart' show PaginationModel;
 
@@ -43,6 +44,23 @@ class ConnectionService {
   ConnectionService({ApiClient? client}) : _client = client ?? ApiClient();
 
   final ApiClient _client;
+
+  // ── GET /api/connections ──────────────────────────────────────────────────
+
+  /// Fetch paginated accepted connections.
+  Future<PaginatedCompanionsModel> getMyConnections({
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    final response = await _client.get(
+      ApiConstants.connections,
+      queryParams: {
+        'page': page.toString(),
+        'per_page': perPage.toString(),
+      },
+    );
+    return PaginatedCompanionsModel.fromJson(response.dataAsMap);
+  }
 
   // ── GET /api/connections/received ────────────────────────────────────────────
 
