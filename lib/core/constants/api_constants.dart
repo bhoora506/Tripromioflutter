@@ -98,5 +98,20 @@ abstract final class ApiConstants {
   /// POST /api/connections/{id}/cancel
   static String connectionAction(int id, String action) =>
       '/connections/$id/$action';
+
+  // ── Conversation / Chat endpoints ──────────────────────────────────────────
+
+  /// GET  /api/conversations    (list user's conversations)
+  /// POST /api/conversations    (find-or-create conversation)
+  static const String conversations = '/conversations';
+
+  /// GET  /api/conversations/{id}/messages   (paginated message history)
+  /// POST /api/conversations/{id}/messages   (send a message)
+  static String conversationMessages(int conversationId) =>
+      '/conversations/$conversationId/messages';
+
+  /// POST /api/conversations/{id}/read  (mark messages as read)
+  static String conversationRead(int conversationId) =>
+      '/conversations/$conversationId/read';
 }
 

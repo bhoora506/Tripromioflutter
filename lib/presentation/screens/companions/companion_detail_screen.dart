@@ -6,7 +6,9 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/companion_model.dart';
+import '../../../data/services/chat_service.dart';
 import '../../../data/services/connection_service.dart';
+import '../connections/conversation_detail_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CompanionDetailScreen
@@ -23,9 +25,11 @@ class CompanionDetailScreen extends StatefulWidget {
 
 class _CompanionDetailScreenState extends State<CompanionDetailScreen> {
   final _connectionService = ConnectionService();
+  final _chatService = ChatService();
 
   bool _isSending = false;
   bool _isSent = false;
+  bool _isStartingChat = false;
 
   static const Map<String, String> _styleLabels = {
     'adventure': '🏔️ Adventure',
@@ -41,15 +45,23 @@ class _CompanionDetailScreenState extends State<CompanionDetailScreen> {
   @override
   void dispose() {
     _connectionService.dispose();
+    _chatService.dispose();
     super.dispose();
   }
 
   CompanionModel get _companion {
     final args = ModalRoute.of(context)!.settings.arguments;
+    if (args is CompanionDetailArgs) return args.companion;
     if (args is! CompanionModel) {
       throw StateError('CompanionDetailScreen requires a CompanionModel argument');
     }
     return args;
+  }
+
+  bool get _isAcceptedConnection {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is CompanionDetailArgs) return args.isAcceptedConnection;
+    return false;
   }
 
   Future<void> _sendRequest() async {
@@ -108,6 +120,48 @@ class _CompanionDetailScreenState extends State<CompanionDetailScreen> {
           backgroundColor: AppColors.error,
         ),
       );
+    }
+  }
+
+  Future<void> _startChat() async {
+    if (_isStartingChat) return;
+    setState(() => _isStartingChat = true);
+    try {
+      final conversation = await _chatService.createConversation(
+        recipientId: _companion.id,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ConversationDetailScreen(conversation: conversation),
+        ),
+      );
+    } on ConflictException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Connection must be accepted before messaging.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not start conversation. Please try again.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isStartingChat = false);
     }
   }
 
@@ -298,11 +352,16 @@ class _CompanionDetailScreenState extends State<CompanionDetailScreen> {
             ),
           ],
         ),
-        child: _ConnectBtn(
-          isSending: _isSending,
-          isSent: _isSent,
-          onTap: _sendRequest,
-        ),
+        child: _isAcceptedConnection
+            ? _ChatBtn(
+                isLoading: _isStartingChat,
+                onTap: _startChat,
+              )
+            : _ConnectBtn(
+                isSending: _isSending,
+                isSent: _isSent,
+                onTap: _sendRequest,
+              ),
       ),
     );
   }
@@ -538,4 +597,89 @@ String? _resolvePhotoUrl(String? raw) {
   if (raw == null || raw.isEmpty) return null;
   if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Navigation argument object for CompanionDetailScreen
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Typed navigation argument for [CompanionDetailScreen].
+///
+/// Use [CompanionDetailArgs] instead of a plain [CompanionModel] when
+/// you need to communicate additional context (e.g., accepted connection).
+class CompanionDetailArgs {
+  const CompanionDetailArgs({
+    required this.companion,
+    this.isAcceptedConnection = false,
+  });
+
+  final CompanionModel companion;
+
+  /// True when this companion is an accepted connection — shows the
+  /// "Message" button instead of "Send Connection Request".
+  final bool isAcceptedConnection;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chat Button
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ChatBtn extends StatelessWidget {
+  const _ChatBtn({required this.isLoading, required this.onTap});
+
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: isLoading ? null : onTap,
+      child: Container(
+        height: 54,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isLoading
+                ? [Colors.grey.shade400, Colors.grey.shade500]
+                : AppColors.primaryGradient,
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+          boxShadow: isLoading
+              ? []
+              : [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.35),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (isLoading)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2.5),
+              )
+            else
+              const Icon(Icons.chat_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: AppConstants.spacingSm),
+            Text(
+              isLoading ? 'Opening chat…' : 'Message',
+              style: GoogleFonts.nunito(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

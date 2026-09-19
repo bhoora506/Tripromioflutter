@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../data/models/companion_model.dart';
 import '../../../data/services/connection_service.dart';
 import '../../../routes/app_routes.dart';
+import '../companions/companion_detail_screen.dart' show CompanionDetailArgs;
 import '../profile/profile_screen.dart' show resolvePhotoUrl;
 
 class MyConnectionsScreen extends StatefulWidget {
@@ -253,7 +254,10 @@ class _MyConnectionsScreenState extends State<MyConnectionsScreen> {
             onTap: () {
               Navigator.of(context).pushNamed(
                 AppRoutes.companionDetail,
-                arguments: connection,
+                arguments: CompanionDetailArgs(
+                  companion: connection,
+                  isAcceptedConnection: true,
+                ),
               );
             },
           );

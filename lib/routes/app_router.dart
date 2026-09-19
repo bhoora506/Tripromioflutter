@@ -7,6 +7,7 @@ import '../presentation/screens/companions/find_companions_screen.dart';
 import '../presentation/screens/companions/search_results_screen.dart';
 import '../presentation/screens/companions/companion_detail_screen.dart';
 import '../presentation/screens/connections/connection_requests_screen.dart';
+import '../presentation/screens/connections/conversations_screen.dart';
 import '../presentation/screens/connections/my_connections_screen.dart';
 import '../presentation/screens/home/home_screen.dart';
 import '../presentation/screens/onboarding/onboarding_screen.dart';
@@ -69,10 +70,9 @@ abstract final class AppRouter {
       AppRoutes.companionDetail => const CompanionDetailScreen(),
       AppRoutes.myConnections => const MyConnectionsScreen(),
       AppRoutes.connectionRequests => const ConnectionRequestsScreen(),
-
-      // ── Future screens (placeholders) ─────────────────────────────────────
-      AppRoutes.conversations => const PlaceholderScreen(label: 'Conversations'),
-      AppRoutes.chat => const PlaceholderScreen(label: 'Chat'),
+      AppRoutes.conversations => const ConversationsScreen(),
+      // NOTE: ConversationDetailScreen is opened via MaterialPageRoute with a
+      // ConversationModel constructor arg — not a named route.
 
       _ => const PlaceholderScreen(label: '404 – Not Found'),
     };
