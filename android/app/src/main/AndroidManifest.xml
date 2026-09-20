@@ -7,6 +7,11 @@
     <!-- Android ≤12 fallback. maxSdkVersion prevents it from appearing on Android 13+ -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
+    <!-- Android 13+ (API 33+): required to show push notifications via FCM.
+         Declared without platform guard — Android build tools correctly treat
+         POST_NOTIFICATIONS as an API-33+ runtime permission.
+         The runtime permission dialog is managed by firebase_messaging.requestPermission(). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:label="Tripromio"
