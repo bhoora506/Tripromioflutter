@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "307963038184",
+    "project_id": "travelromio-613f1",
+    "storage_bucket": "travelromio-613f1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:307963038184:android:d4c6e37fa20bf76337bc5d",
+        "android_client_info": {
+          "package_name": "com.example.tripromio"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBbM1VpRobYPaKRyNbLGWJIPPfUicaJYcQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
