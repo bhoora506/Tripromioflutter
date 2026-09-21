@@ -120,6 +120,7 @@ class TripService {
     String? description,
     required int maxMembers,
     List<int>? interestIds,
+    String? imagePath,
   }) async {
     final body = <String, dynamic>{
       'title': title,
@@ -399,3 +400,5 @@ class TripService {
     return _parseJoinRequest(response.dataAsMap);
   }
 }
+
+

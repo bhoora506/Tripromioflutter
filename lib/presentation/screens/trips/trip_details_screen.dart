@@ -403,6 +403,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
               child: _TripHero(
                 destination: trip.destination,
                 seed: trip.id,
+                  imageUrl: trip.imageUrl,
               ),
             ),
 
@@ -699,9 +700,10 @@ String _tripTypeLabel(TripType type) {
 // ── Hero ──────────────────────────────────────────────────────────────────────
 
 class _TripHero extends StatelessWidget {
-  const _TripHero({required this.destination, required this.seed});
+  const _TripHero({required this.destination, required this.seed, this.imageUrl});
   final String destination;
-  final int seed;
+    final int seed;
+    final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -710,7 +712,13 @@ class _TripHero extends StatelessWidget {
       SizedBox(
         height: 280,
         width: double.infinity,
-        child: CustomPaint(painter: _HeroPainter(seed: seed)),
+        child: imageUrl != null
+            ? Image.network(
+                imageUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (c, e, s) => CustomPaint(painter: _HeroPainter(seed: seed)),
+              )
+            : CustomPaint(painter: _HeroPainter(seed: seed)),
       ),
       Positioned.fill(
         child: DecoratedBox(
@@ -1347,3 +1355,8 @@ class _StickyActions extends StatelessWidget {
     );
   }
 }
+
+
+
+
+

@@ -1,6 +1,8 @@
 // ignore_for_file: avoid_print
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_constants.dart';
@@ -42,6 +44,21 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   final Set<int> _selectedInterestIds = {};
   bool _loadingInterests = true;
   bool _submitting = false;
+  String? _selectedImagePath;
+  final _imagePicker = ImagePicker();
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picked = await _imagePicker.pickImage(source: source);
+      if (picked != null) {
+        setState(() => _selectedImagePath = picked.path);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick image: $e')),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -203,6 +220,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
     try {
       final trip = await _tripService.createTrip(
+          imagePath: _selectedImagePath,
         title: _titleCtrl.text.trim(),
         destination: _destinationCtrl.text.trim(),
         startDate: _dateToApi(_startDate!),
@@ -935,3 +953,6 @@ class _TripTypeSheet extends StatelessWidget {
     );
   }
 }
+
+
+

@@ -24,6 +24,7 @@ class TripCardData {
     required this.companionCount,
     required this.budget,
     required this.illustrationSeed,
+      this.imageUrl,
     required this.tag,
     this.tripId,
   });
@@ -51,6 +52,9 @@ class TripCardData {
 
   /// Seed used to deterministically pick illustration palette & shapes.
   final int illustrationSeed;
+  
+    /// The URL of the uploaded image (if any).
+    final String? imageUrl;
 
   /// Short category label — e.g. "Fort", "Beach", "Hill Station".
   final String tag;
@@ -87,6 +91,7 @@ class TripCardData {
       companionCount: trip.memberCount,
       budget: budget,
       illustrationSeed: trip.id,
+      imageUrl: trip.imageUrl,
       tag: tag,
     );
   }
@@ -180,7 +185,14 @@ class TripCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    _TripIllustration(seed: data.illustrationSeed),
+                    if (data.imageUrl != null)
+                        Image.network(
+                          data.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => _TripIllustration(seed: data.illustrationSeed),
+                        )
+                      else
+                        _TripIllustration(seed: data.illustrationSeed),
                     // Gradient overlay for text legibility
                     Positioned(
                       left: 0,
@@ -678,3 +690,4 @@ class _TripScenePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _TripScenePainter old) => old.seed != seed;
 }
+

@@ -154,6 +154,7 @@ class TripModel {
     this.description,
     required this.maxMembers,
     required this.status,
+    this.imageUrl,
     this.owner,
     this.interests = const [],
     required this.memberCount,
@@ -177,6 +178,7 @@ class TripModel {
   final String? description;
   final int maxMembers;
   final TripStatus status;
+  final String? imageUrl;
   final TripOwnerModel? owner;
   final List<InterestModel> interests;
   final int memberCount;
@@ -201,6 +203,7 @@ class TripModel {
       description: json['description'] as String?,
       maxMembers: _parseInt(json['max_members']),
       status: TripStatus.fromString(json['status'] as String?),
+      imageUrl: json['image_url'] as String?,
       owner: json['owner'] != null
           ? TripOwnerModel.fromJson(json['owner'] as Map<String, dynamic>)
           : null,
@@ -233,6 +236,7 @@ class TripModel {
         'description': description,
         'max_members': maxMembers,
         'status': status.name,
+        'image_url': imageUrl,
         'owner': owner?.toJson(),
         'interests': interests.map((e) => e.toJson()).toList(),
         'member_count': memberCount,
@@ -341,3 +345,4 @@ double? _parseDouble(dynamic value) {
   if (value is num) return value.toDouble();
   return null;
 }
+
