@@ -9,6 +9,10 @@ import '../../widgets/trip_card.dart';
 
 import '../../../data/models/trip_model.dart';
 import '../../../data/services/trip_service.dart';
+import '../../../data/services/auth_service.dart';
+import '../../../data/services/profile_service.dart';
+import '../../../data/models/profile_stats_model.dart';
+import '../../../data/models/user_model.dart';
 import '../../../data/services/push_notification_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -253,6 +257,10 @@ class _HomeBody extends StatefulWidget {
 
 class _HomeBodyState extends State<_HomeBody> {
   final _tripService = TripService();
+  final _profileService = ProfileService();
+  UserModel? _user;
+  ProfileStatsModel? _stats;
+  bool _loadingStats = true;
   List<TripModel> _trips = [];
   bool _loading = true;
   String? _errorMessage;
@@ -263,12 +271,31 @@ class _HomeBodyState extends State<_HomeBody> {
     PushNotificationService.consumePendingNavigation();
     super.initState();
     _loadTrips();
+    _loadStats();
   }
 
   @override
   void dispose() {
+    _profileService.dispose();
     _tripService.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadStats() async {
+    setState(() => _loadingStats = true);
+    try {
+      final user = await AuthService().getCurrentUser();
+      final stats = await _profileService.getStats();
+      if (!mounted) return;
+      setState(() {
+        _user = user;
+        _stats = stats;
+        _loadingStats = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingStats = false);
+    }
   }
 
   Future<void> _loadTrips() async {
@@ -308,7 +335,7 @@ class _HomeBodyState extends State<_HomeBody> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Header with gradient background
-                const _HomeHeader(),
+                _HomeHeader(user: _user, stats: _stats, loadingStats: _loadingStats),
                 const SizedBox(height: AppConstants.spacingMd),
                 // Search bar
                 const Padding(
@@ -435,7 +462,10 @@ class _HomeBodyState extends State<_HomeBody> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader();
+  const _HomeHeader({super.key, this.user, this.stats, this.loadingStats = true});
+  final UserModel? user;
+  final ProfileStatsModel? stats;
+  final bool loadingStats;
 
   @override
   Widget build(BuildContext context) {
@@ -473,7 +503,7 @@ class _HomeHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Hey, Arjun! 👋',
+                      'Hey, ${user?.name.isNotEmpty == true ? user!.name : 'there'}! 👋',
                       style: GoogleFonts.nunito(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
@@ -497,12 +527,12 @@ class _HomeHeader extends StatelessWidget {
               // Notification button
               _HeaderIconBtn(
                 icon: Icons.notifications_outlined,
-                badgeCount: 3,
+                badgeCount: 0,
                 onTap: () {},
               ),
               const SizedBox(width: AppConstants.spacingSm),
               // Avatar
-              _UserAvatar(),
+              _UserAvatar(user: user),
             ],
           ),
 
@@ -510,12 +540,16 @@ class _HomeHeader extends StatelessWidget {
 
           // Quick stats row
           Row(
-            children: const [
-              _StatBadge(value: '12', label: 'Trips'),
-              SizedBox(width: AppConstants.spacingMd),
-              _StatBadge(value: '28', label: 'Reviews'),
-              SizedBox(width: AppConstants.spacingMd),
-              _StatBadge(value: '4.8 ★', label: 'Rating'),
+            children: [
+              if (loadingStats) ...[
+                const _StatSkeleton(),
+                const SizedBox(width: AppConstants.spacingMd),
+                const _StatSkeleton(),
+              ] else ...[
+                _StatBadge(value: '${stats?.tripsCount ?? 0}', label: 'Trips'),
+                const SizedBox(width: AppConstants.spacingMd),
+                _StatBadge(value: '${stats?.connectionsCount ?? 0}', label: 'Connections'),
+              ],
             ],
           ),
         ],
@@ -581,10 +615,14 @@ class _HeaderIconBtn extends StatelessWidget {
 }
 
 class _UserAvatar extends StatelessWidget {
-  const _UserAvatar();
+  const _UserAvatar({super.key, this.user});
+  final UserModel? user;
 
   @override
   Widget build(BuildContext context) {
+    final photoUrl = user?.profile?.profilePhotoUrl;
+    final initial = user?.name.isNotEmpty == true ? user!.name[0].toUpperCase() : 'U';
+
     return Container(
       width: 40,
       height: 40,
@@ -599,17 +637,25 @@ class _UserAvatar extends StatelessWidget {
           color: Colors.white.withValues(alpha: 0.30),
           width: 2,
         ),
+        image: photoUrl != null
+            ? DecorationImage(
+                image: NetworkImage(photoUrl),
+                fit: BoxFit.cover,
+              )
+            : null,
       ),
-      child: const Center(
-        child: Text(
-          'A',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-          ),
-        ),
-      ),
+      child: photoUrl == null
+          ? Center(
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          : null,
     );
   }
 }
@@ -857,6 +903,23 @@ class _DestinationChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+class _StatSkeleton extends StatelessWidget {
+  const _StatSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 70,
+      height: 50,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
       ),
     );
   }

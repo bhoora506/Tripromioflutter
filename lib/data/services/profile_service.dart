@@ -1,3 +1,4 @@
+import '../models/profile_stats_model.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_client.dart';
 import '../models/user_model.dart';
@@ -263,5 +264,14 @@ class ProfileService {
     await _client.delete('${ApiConstants.profileAvailability}/$id');
   }
 
+  
+  // -- GET /api/profile/stats --------------------------------------------------
+
+  Future<ProfileStatsModel> getStats() async {
+    final response = await _client.get(ApiConstants.profileStats);
+    final data = response.dataAsMap;
+    return ProfileStatsModel.fromJson(data);
+  }
   void dispose() => _client.dispose();
 }
+
