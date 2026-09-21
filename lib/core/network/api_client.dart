@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_print
+﻿// ignore_for_file: avoid_print
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -13,14 +13,14 @@ import 'api_response.dart';
 /// Central HTTP client for all Tripromio API calls.
 ///
 /// Responsibilities:
-///   • Builds the full URL from [ApiConstants.baseUrl] + path.
-///   • Injects `Accept: application/json` on every request.
-///   • Injects `Content-Type: application/json` for JSON bodies.
-///   • Attaches `Authorization: Bearer <token>` when a token exists.
-///   • Decodes the standard `{ success, message, data }` envelope.
-///   • Throws typed [ApiException] subclasses for every error condition.
+///   â€¢ Builds the full URL from [ApiConstants.baseUrl] + path.
+///   â€¢ Injects `Accept: application/json` on every request.
+///   â€¢ Injects `Content-Type: application/json` for JSON bodies.
+///   â€¢ Attaches `Authorization: Bearer <token>` when a token exists.
+///   â€¢ Decodes the standard `{ success, message, data }` envelope.
+///   â€¢ Throws typed [ApiException] subclasses for every error condition.
 ///
-/// Do NOT call this directly from the UI — use a dedicated service class
+/// Do NOT call this directly from the UI â€” use a dedicated service class
 /// (e.g., [HealthService], [AuthService]) that wraps [ApiClient].
 class ApiClient {
   ApiClient({TokenStorage? tokenStorage})
@@ -30,7 +30,7 @@ class ApiClient {
   final TokenStorage _tokenStorage;
   final http.Client _httpClient;
 
-  // ── Public HTTP methods ───────────────────────────────────────────────────
+  // â”€â”€ Public HTTP methods â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<ApiResponse> get(String path, {Map<String, String>? queryParams}) async {
     final uri = _buildUri(path, queryParams: queryParams);
@@ -95,13 +95,17 @@ class ApiClient {
     }
   }
 
-  Future<ApiResponse> delete(String path) async {
+  Future<ApiResponse> delete(String path, {Map<String, dynamic>? body}) async {
     final uri = _buildUri(path);
-    final headers = await _buildHeaders();
+    final headers = await _buildHeaders(withContentType: body != null);
     try {
-      _logRequest('DELETE', uri);
+      _logRequest('DELETE', uri, body: body);
       final response = await _httpClient
-          .delete(uri, headers: headers)
+          .delete(
+            uri,
+            headers: headers,
+            body: body != null ? jsonEncode(body) : null,
+          )
           .timeout(ApiConstants.receiveTimeout);
       _logResponse(response.request?.method ?? '', response.request?.url ?? uri, response.statusCode, response.body);
       return _handleResponse(response, response.request?.method ?? '', response.request?.url ?? uri);
@@ -116,7 +120,7 @@ class ApiClient {
     }
   }
 
-  // ── Multipart (for profile photo upload) ─────────────────────────────────
+  // â”€â”€ Multipart (for profile photo upload) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Send a multipart/form-data POST request.
   ///
@@ -124,11 +128,11 @@ class ApiClient {
   /// [filePath] is the absolute path of the local file.
   ///
   /// Headers set automatically:
-  ///   • `Accept: application/json`
-  ///   • `Authorization: Bearer <token>`
+  ///   â€¢ `Accept: application/json`
+  ///   â€¢ `Authorization: Bearer <token>`
   ///
   /// `Content-Type: multipart/form-data; boundary=...` is added by the
-  /// http package automatically — never set it manually.
+  /// http package automatically â€” never set it manually.
   Future<ApiResponse> postMultipart(
     String path, {
     required String fileField,
@@ -137,7 +141,7 @@ class ApiClient {
   }) async {
     final uri = _buildUri(path);
 
-    // Build headers WITHOUT Content-Type — the multipart request sets it.
+    // Build headers WITHOUT Content-Type â€” the multipart request sets it.
     final headers = await _buildHeaders(withContentType: false);
 
     try {
@@ -167,7 +171,7 @@ class ApiClient {
     }
   }
 
-  // ── Internals ─────────────────────────────────────────────────────────────
+  // â”€â”€ Internals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _logRequest(String method, Uri uri, {Map<String, dynamic>? body, Map<String, String>? fields}) {
     if (!kDebugMode) return;
@@ -244,7 +248,7 @@ class ApiClient {
   ApiResponse _handleResponse(http.Response response, String method, Uri uri) {
     final statusCode = response.statusCode;
 
-    // 204 No Content – no body to decode.
+    // 204 No Content â€“ no body to decode.
     if (statusCode == 204) {
       return const ApiResponse(success: true, message: 'No content');
     }
@@ -258,7 +262,7 @@ class ApiClient {
       throw ServerException('Invalid response format (status $statusCode)');
     }
 
-    // 2xx – success envelope.
+    // 2xx â€“ success envelope.
     if (statusCode >= 200 && statusCode < 300) {
       return ApiResponse.fromJson(json);
     }
@@ -315,3 +319,4 @@ class ApiClient {
   /// Release resources.  Call when the client is no longer needed.
   void dispose() => _httpClient.close();
 }
+

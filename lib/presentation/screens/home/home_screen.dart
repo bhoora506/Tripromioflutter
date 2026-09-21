@@ -9,6 +9,7 @@ import '../../widgets/trip_card.dart';
 
 import '../../../data/models/trip_model.dart';
 import '../../../data/services/trip_service.dart';
+import '../../../data/services/push_notification_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Home screen + navigation shell
@@ -258,6 +259,8 @@ class _HomeBodyState extends State<_HomeBody> {
 
   @override
   void initState() {
+    // Consume pending push notification navigation if any
+    PushNotificationService.consumePendingNavigation();
     super.initState();
     _loadTrips();
   }

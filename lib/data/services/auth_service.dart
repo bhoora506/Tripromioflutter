@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/storage/token_storage.dart';
 import '../models/user_model.dart';
+import 'push_notification_service.dart';
 
 /// Result object returned by [AuthService] login/register calls.
 class AuthResult {
@@ -13,13 +16,19 @@ class AuthResult {
 
 /// Service for all authentication-related API calls.
 ///
-/// Wraps [ApiClient] and [TokenStorage] — the UI never touches those directly.
+/// Wraps [ApiClient] and [TokenStorage] - the UI never touches those directly.
+///
+/// H1-B additions:
+///   - After successful login or register, triggers FCM device-token sync via
+///     [PushNotificationService.syncCurrentToken]. Non-blocking (unawaited).
+///   - Before logout, attempts to unregister the FCM device token via
+///     [PushNotificationService.unregisterCurrentToken]. Failure is non-fatal.
 ///
 /// Usage:
-/// ```dart
+/// `dart
 /// final service = AuthService();
 /// final result = await service.login(email: 'a@b.com', password: 'Secret@1');
-/// ```
+/// `
 class AuthService {
   AuthService({ApiClient? client, TokenStorage? tokenStorage})
       : _client = client ?? ApiClient(),
@@ -28,7 +37,7 @@ class AuthService {
   final ApiClient _client;
   final TokenStorage _tokenStorage;
 
-  // ── Register ──────────────────────────────────────────────────────────────
+  // Register
 
   /// Register a new user account.
   ///
@@ -61,10 +70,15 @@ class AuthService {
     }
 
     await _tokenStorage.saveToken(token);
+
+    // Sync FCM device token to backend now that a valid session exists.
+    // unawaited: non-blocking, must not delay navigation.
+    unawaited(PushNotificationService.instance.syncCurrentToken());
+
     return AuthResult(user: UserModel.fromJson(userJson), token: token);
   }
 
-  // ── Login ─────────────────────────────────────────────────────────────────
+  // Login
 
   /// Authenticate an existing user.
   ///
@@ -90,10 +104,17 @@ class AuthService {
     }
 
     await _tokenStorage.saveToken(token);
+
+    // Sync FCM device token to backend now that a valid session exists.
+    // unawaited: non-blocking, must not delay navigation.
+    // If FCM token not yet obtained (pre-auth window), syncCurrentToken is
+    // a no-op; the token syncs on next onTokenRefresh or next login.
+    unawaited(PushNotificationService.instance.syncCurrentToken());
+
     return AuthResult(user: UserModel.fromJson(userJson), token: token);
   }
 
-  // ── Current user ──────────────────────────────────────────────────────────
+  // Current user
 
   /// Fetch the currently authenticated user from the backend.
   ///
@@ -109,26 +130,36 @@ class AuthService {
     return UserModel.fromJson(userJson);
   }
 
-  // ── Logout ────────────────────────────────────────────────────────────────
+  // Logout
 
   /// Log the user out.
   ///
-  /// Calls the backend logout endpoint to revoke the Sanctum token,
-  /// then deletes the local token regardless of whether the network call
-  /// succeeded (to prevent stale auth state).
+  /// Steps:
+  ///   1. Unregister the FCM device token from the backend (H1-B) while the
+  ///      Sanctum session is still valid. Failure is non-fatal.
+  ///   2. Call backend logout to revoke the Sanctum token.
+  ///   3. Delete the local token regardless of network result.
   Future<void> logout() async {
+    // Step 1: Unregister FCM token while still authenticated.
+    try {
+      await PushNotificationService.instance.unregisterCurrentToken();
+    } catch (_) {
+      // Non-fatal - logout must complete even if FCM unregister fails.
+    }
+
+    // Step 2 + 3: Revoke Sanctum token and clear local storage.
     try {
       await _client.post(ApiConstants.authLogout);
     } on NetworkException {
-      // Network unreachable — still clear local token below.
+      // Network unreachable - still clear local token below.
     } on ApiException {
-      // Backend error — still clear local token below.
+      // Backend error - still clear local token below.
     } finally {
       await _tokenStorage.deleteToken();
     }
   }
 
-  // ── Forgot password ───────────────────────────────────────────────────────
+  // Forgot password
 
   /// Request a password reset email.
   ///

@@ -63,6 +63,17 @@ class ChatService {
 
   // ── GET /api/conversations/{id}/messages ──────────────────────────────────
 
+  /// Fetch a specific conversation by ID.
+  Future<ConversationModel> getConversation(int conversationId) async {
+    final response = await _client.get('${ApiConstants.conversations}/$conversationId');
+    final data = response.dataAsMap;
+    final convJson = data['conversation'] as Map<String, dynamic>?;
+    if (convJson != null) {
+      return ConversationModel.fromJson(convJson);
+    }
+    return ConversationModel.fromJson(data);
+  }
+
   /// Fetch paginated message history for [conversationId].
   ///
   /// Backend returns newest-first. The UI displays them reversed (oldest at top).

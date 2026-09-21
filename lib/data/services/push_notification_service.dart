@@ -1,160 +1,331 @@
-﻿import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+import '../../core/constants/api_constants.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_exception.dart';
+import '../../core/storage/token_storage.dart';
+import '../../routes/app_router.dart';
+import '../../presentation/screens/connections/conversation_detail_screen.dart';
+import 'chat_service.dart';
+
+/// Top-level background message handler for FCM.
+/// Must be outside of any class and annotated with @pragma('vm:entry-point').
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // OS handles showing the notification for background FCM messages.
+  // We keep this empty and minimal to satisfy Firebase requirements.
+  if (kDebugMode) {
+    print('[FCM Background] Message received: ${message.messageId}');
+  }
+}
 
 /// Handles Firebase Cloud Messaging (FCM) lifecycle for Tripromio.
-///
-/// Responsibilities (Phase H1-A):
-///   - Request notification permission (Android 13+ / iOS).
-///   - Obtain the FCM registration token.
-///   - Listen for token refresh events.
-///   - Listen for foreground messages and log basic metadata.
-///
-/// NOT in scope for this phase:
-///   - Sending the token to the Laravel backend.
-///   - Local notification UI (flutter_local_notifications).
-///   - Navigation on notification tap.
-///   - Chat / Trips / Connections business logic.
-///
-/// Usage (called once from [main] after [Firebase.initializeApp]):
-/// ```dart
-/// await PushNotificationService.instance.initialize();
-/// ```
 class PushNotificationService {
   PushNotificationService._();
 
-  /// Singleton — FCM state should be app-wide.
   static final PushNotificationService instance = PushNotificationService._();
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
 
-  // ── Public API ─────────────────────────────────────────────────────────────
+  final ApiClient _apiClient = ApiClient();
+  final TokenStorage _tokenStorage = TokenStorage();
+  
+  String? _currentToken;
+  bool _isInitialised = false;
+  
+  /// Stores a conversation ID if navigation is attempted before auth is ready.
+  static int? _pendingConversationId;
 
-  /// Initialise FCM:
-  ///   1. Request notification permission.
-  ///   2. Obtain and log the FCM token (development only).
-  ///   3. Subscribe to token-refresh events.
-  ///   4. Subscribe to foreground messages.
-  ///
-  /// This method is intentionally non-throwing — all errors are caught and
-  /// logged so that a FCM failure never crashes the app or blocks startup.
+  // ── Initialization ────────────────────────────────────────────────────────
+
   Future<void> initialize() async {
-    await _requestPermission();
-    await _fetchAndLogToken();
-    _listenTokenRefresh();
-    _listenForegroundMessages();
-  }
+    if (_isInitialised) return;
 
-  // ── Permission ─────────────────────────────────────────────────────────────
-
-  /// Requests notification permission.
-  ///
-  /// On Android 13+ (API 33+) this triggers the OS permission dialog once.
-  /// On older Android versions the call is a no-op (permission is granted
-  /// implicitly via the manifest declaration).
-  /// On iOS this shows the system alert sheet.
-  ///
-  /// The result is logged for development; no UI feedback is shown in this
-  /// phase.  The permission is NOT re-requested if already granted/denied.
-  Future<void> _requestPermission() async {
     try {
-      final settings = await _messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        // Keeping provisional/criticalAlert/announcement false — we only need
-        // standard push notifications for this phase.
-        provisional: false,
-        criticalAlert: false,
-        announcement: false,
+      // 1. Setup local notifications
+      const androidInitSettings =
+          AndroidInitializationSettings('@mipmap/launcher_icon');
+      const initSettings = InitializationSettings(android: androidInitSettings);
+      
+      await _localNotifications.initialize(
+        settings: initSettings,
+        onDidReceiveNotificationResponse: _onLocalNotificationTapped,
       );
 
-      final status = settings.authorizationStatus;
-      // ignore: avoid_print
-      print('[FCM] Notification permission status: $status');
+      // Create Android Notification Channel
+      const channel = AndroidNotificationChannel(
+        'tripromio_chat_channel', // id
+        'Chat Messages', // title
+        description: 'Notifications for new chat messages',
+        importance: Importance.high,
+      );
+      
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(channel);
+
+      // 2. Background handler
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+      // 3. Permission & Token
+      await _requestPermission();
+      await _fetchAndCacheToken();
+      _listenTokenRefresh();
+
+      // 4. Listeners
+      _listenForegroundMessages();
+      _setupTapHandlers();
+
+      _isInitialised = true;
     } catch (e) {
-      // Non-fatal — the app works without notification permission.
-      // ignore: avoid_print
-      print('[FCM] Permission request error (non-fatal): $e');
+      if (kDebugMode) {
+        print('[FCM] Initialization error (non-fatal): $e');
+      }
     }
   }
 
-  // ── Token retrieval ────────────────────────────────────────────────────────
+  // ── Sync / Register / Unregister ──────────────────────────────────────────
 
-  /// Fetches the current FCM registration token and logs it.
-  ///
-  /// The token is printed to the console for local development verification
-  /// only.  This debug logging should be removed / hidden behind a
-  /// [kDebugMode] guard before a production release.
-  ///
-  /// IMPORTANT: The FCM token is a device identifier — do NOT log it together
-  /// with user credentials or other PII.
-  Future<void> _fetchAndLogToken() async {
+  Future<void> syncCurrentToken() async {
+    if (_currentToken == null) {
+      await _fetchAndCacheToken();
+    } else {
+      await _syncTokenIfAuthenticated(_currentToken!);
+    }
+  }
+
+  Future<void> registerDeviceToken({
+    required String token,
+    required String platform,
+  }) async {
+    try {
+      await _apiClient.post(
+        ApiConstants.profileDeviceToken,
+        body: {
+          'fcm_token': token,
+          'platform': platform,
+        },
+      );
+      if (kDebugMode) {
+        print('[FCM] Device token registered with backend (platform: $platform).');
+      }
+    } on ApiException catch (e) {
+      if (kDebugMode) {
+        print('[FCM] Device token registration failed (API error): $e');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[FCM] Device token registration unexpected error (non-fatal): $e');
+      }
+    }
+  }
+
+  Future<void> unregisterCurrentToken() async {
+    if (_currentToken != null) {
+      await unregisterDeviceToken(token: _currentToken!);
+    }
+  }
+
+  Future<void> unregisterDeviceToken({required String token}) async {
+    try {
+      await _apiClient.delete(
+        ApiConstants.profileDeviceToken,
+        body: {'fcm_token': token},
+      );
+      if (kDebugMode) {
+        print('[FCM] Device token unregistered from backend.');
+      }
+    } on ApiException catch (e) {
+      if (kDebugMode) {
+        print('[FCM] Device token unregister failed (API error): $e');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[FCM] Device token unregister unexpected error (non-fatal): $e');
+      }
+    }
+  }
+
+  // ── Permission & Token Retrieval ──────────────────────────────────────────
+
+  Future<void> _requestPermission() async {
+    try {
+      await _messaging.requestPermission();
+    } catch (e) {
+      if (kDebugMode) {
+        print('[FCM] Permission request error (non-fatal): $e');
+      }
+    }
+  }
+
+  Future<void> _fetchAndCacheToken() async {
     try {
       final token = await _messaging.getToken();
       if (token != null) {
-        // TODO(phase-H1-B): send [token] to the Laravel backend.
-        // ignore: avoid_print
-        print('[FCM] Registration token: $token');
-      } else {
-        // ignore: avoid_print
-        print('[FCM] Token is null — device may not support FCM.');
+        _currentToken = token;
+        await _syncTokenIfAuthenticated(token);
       }
     } catch (e) {
-      // Non-fatal — token retrieval can fail on emulators or when Google
-      // Play Services are unavailable.
-      // ignore: avoid_print
-      print('[FCM] Token fetch error (non-fatal): $e');
+      if (kDebugMode) {
+        print('[FCM] Token fetch error (non-fatal): $e');
+      }
     }
   }
 
-  // ── Token refresh ──────────────────────────────────────────────────────────
-
-  /// Subscribes to FCM token-refresh events.
-  ///
-  /// Tokens rotate when the app is restored from a backup, or when the user
-  /// clears app data.  When this fires the new token should eventually be
-  /// sent to the backend (Phase H1-B).
   void _listenTokenRefresh() {
     _messaging.onTokenRefresh.listen(
       (newToken) {
-        // TODO(phase-H1-B): send [newToken] to the Laravel backend.
-        // ignore: avoid_print
-        print('[FCM] Token refreshed: $newToken');
+        _currentToken = newToken;
+        unawaited(_syncTokenIfAuthenticated(newToken));
       },
       onError: (Object e) {
-        // Non-fatal.
-        // ignore: avoid_print
-        print('[FCM] Token refresh stream error (non-fatal): $e');
+        if (kDebugMode) {
+          print('[FCM] Token refresh stream error (non-fatal): $e');
+        }
       },
     );
   }
 
-  // ── Foreground messages ────────────────────────────────────────────────────
+  // ── Foreground Messages ───────────────────────────────────────────────────
 
-  /// Subscribes to messages received while the app is in the foreground.
-  ///
-  /// In this phase we only log basic metadata (title / body).
-  /// We deliberately do NOT log the full [RemoteMessage] data map to avoid
-  /// accidentally leaking sensitive payload content.
-  ///
-  /// Local notification UI (flutter_local_notifications) is NOT added here —
-  /// that will be a separate phase once the backend sends real payloads.
   void _listenForegroundMessages() {
     FirebaseMessaging.onMessage.listen(
       (RemoteMessage message) {
         final notification = message.notification;
-        // ignore: avoid_print
-        print(
-          '[FCM] Foreground message received — '
-          'title: ${notification?.title ?? "(none)"}, '
-          'body: ${notification?.body ?? "(none)"}',
-        );
-        // TODO(phase-H1-C): show a local notification or in-app banner.
+        final data = message.data;
+
+        if (notification != null && data['type'] == 'chat_message') {
+          // Show local heads-up notification
+          _localNotifications.show(
+            id: notification.hashCode,
+            title: notification.title,
+            body: notification.body,
+            notificationDetails: const NotificationDetails(
+              android: AndroidNotificationDetails(
+                'tripromio_chat_channel',
+                'Chat Messages',
+                importance: Importance.high,
+                priority: Priority.high,
+              ),
+            ),
+            payload: jsonEncode(data),
+          );
+        }
       },
       onError: (Object e) {
-        // Non-fatal.
-        // ignore: avoid_print
-        print('[FCM] Foreground message stream error (non-fatal): $e');
+        if (kDebugMode) {
+          print('[FCM] Foreground message stream error (non-fatal): $e');
+        }
       },
     );
+  }
+
+  // ── Navigation & Tap Handling ─────────────────────────────────────────────
+
+  void _setupTapHandlers() {
+    // 1. App in Background (tapped to open)
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      _handleNotificationData(message.data);
+    });
+
+    // 2. App Terminated (tapped to launch)
+    _messaging.getInitialMessage().then((RemoteMessage? message) {
+      if (message != null) {
+        _handleNotificationData(message.data);
+      }
+    });
+  }
+
+  void _onLocalNotificationTapped(NotificationResponse response) {
+    if (response.payload != null) {
+      try {
+        final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+        _handleNotificationData(data);
+      } catch (e) {
+        if (kDebugMode) {
+          print('[FCM] Local notification payload parse error: $e');
+        }
+      }
+    }
+  }
+
+  void _handleNotificationData(Map<String, dynamic> data) {
+    if (data['type'] == 'chat_message') {
+      final conversationIdStr = data['conversation_id'];
+      if (conversationIdStr != null) {
+        final conversationId = int.tryParse(conversationIdStr.toString());
+        if (conversationId != null) {
+          _navigateToConversation(conversationId);
+        }
+      }
+    }
+  }
+
+  static Future<void> _navigateToConversation(int conversationId) async {
+    try {
+      final hasSession = await TokenStorage().hasToken();
+      if (!hasSession || AppRouter.navigatorKey.currentContext == null) {
+        // App is still bootstrapping or user is logged out.
+        // Save pending ID to be consumed later.
+        _pendingConversationId = conversationId;
+        return;
+      }
+
+      final conversation = await ChatService().getConversation(conversationId);
+      
+      final context = AppRouter.navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ConversationDetailScreen(conversation: conversation),
+          ),
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[FCM] Navigation error: $e');
+      }
+    }
+  }
+  
+  /// Called by Home or post-login sequence to consume any pending navigation.
+  static void consumePendingNavigation() {
+    if (_pendingConversationId != null) {
+      final id = _pendingConversationId!;
+      _pendingConversationId = null;
+      _navigateToConversation(id);
+    }
+  }
+
+  // ── Internal helpers ──────────────────────────────────────────────────────
+
+  Future<void> _syncTokenIfAuthenticated(String token) async {
+    try {
+      final hasSession = await _tokenStorage.hasToken();
+      if (!hasSession) return;
+      await registerDeviceToken(token: token, platform: _currentPlatform);
+    } catch (e) {
+      // safe ignore
+    }
+  }
+
+  String get _currentPlatform {
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        return 'ios';
+      case TargetPlatform.android:
+      default:
+        return 'android';
+    }
   }
 }

@@ -51,6 +51,7 @@ class TripromioApp extends StatelessWidget {
       themeMode: ThemeMode.system,
 
       // Routing
+      navigatorKey: AppRouter.navigatorKey,
       initialRoute: AppRoutes.splash,
       onGenerateRoute: AppRouter.onGenerateRoute,
     );

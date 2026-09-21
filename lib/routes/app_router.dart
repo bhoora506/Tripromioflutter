@@ -31,6 +31,10 @@ import '../presentation/screens/trips/trip_members_screen.dart';
 /// As screens are built, replace the [PlaceholderScreen] entries with the
 /// real screen widgets. Use [AppRoutes] constants for all route names.
 abstract final class AppRouter {
+  /// Global navigator key to allow navigation without a BuildContext,
+  /// useful for push notification tap handling.
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   /// Returns the [RouteFactory] to pass to [MaterialApp.onGenerateRoute].
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     final Widget page = switch (settings.name) {
