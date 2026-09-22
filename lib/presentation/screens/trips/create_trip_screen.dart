@@ -353,6 +353,90 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Banner Image
+                    if (_selectedImagePath == null)
+                      GestureDetector(
+                        onTap: () => _pickImage(ImageSource.gallery),
+                        child: Container(
+                          height: 160,
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceLight,
+                            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+                            border: Border.all(color: AppColors.borderLight, width: 2),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.add_photo_alternate_rounded,
+                                  size: 40, color: AppColors.primary),
+                              const SizedBox(height: AppConstants.spacingSm),
+                              Text(
+                                'Add Trip Banner',
+                                style: GoogleFonts.nunito(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimaryLight,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Choose a photo for your trip',
+                                style: GoogleFonts.nunito(
+                                  fontSize: 13,
+                                  color: AppColors.textHintLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      Column(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+                            child: Image.file(
+                              File(_selectedImagePath!),
+                              height: 160,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(height: AppConstants.spacingSm),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton.icon(
+                                onPressed: () => _pickImage(ImageSource.gallery),
+                                icon: const Icon(Icons.edit_rounded, size: 16),
+                                label: Text(
+                                  'Change',
+                                  style: GoogleFonts.nunito(fontWeight: FontWeight.w700),
+                                ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.primary,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: () => setState(() => _selectedImagePath = null),
+                                icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                                label: Text(
+                                  'Remove',
+                                  style: GoogleFonts.nunito(fontWeight: FontWeight.w700),
+                                ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.error,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+
+                    const SizedBox(height: AppConstants.spacingMd),
+
                     // Title
                     _FieldLabel('Trip Title *'),
                     const SizedBox(height: AppConstants.spacingXs),
