@@ -139,7 +139,28 @@ class TripService {
     if (description != null) body['description'] = description;
     if (interestIds != null) body['interest_ids'] = interestIds;
 
-    final response = await _client.post(ApiConstants.trips, body: body);
+    dynamic response;
+    if (imagePath != null && imagePath.isNotEmpty) {
+      final fields = <String, String>{};
+      body.forEach((key, value) {
+        if (key == 'interest_ids') {
+          final list = value as List<int>;
+          for (var i = 0; i < list.length; i++) {
+            fields['${key}[${i}]'] = list[i].toString();
+          }
+        } else {
+          fields[key] = value.toString();
+        }
+      });
+      response = await _client.postMultipart(
+        ApiConstants.trips,
+        fileField: 'image',
+        filePath: imagePath,
+        fields: fields,
+      );
+    } else {
+      response = await _client.post(ApiConstants.trips, body: body);
+    }
 
     final data = response.dataAsMap;
     final tripJson = data['trip'] as Map<String, dynamic>?;
