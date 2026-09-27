@@ -327,7 +327,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Log out?'),
-        content: const Text('Are you sure you want to log out of Tripromio?'),
+        content: const Text('Are you sure you want to log out of Travelromio?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),

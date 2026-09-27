@@ -198,6 +198,8 @@ class TripService {
     String? description,
     int? maxMembers,
     List<int>? interestIds,
+    String? imagePath,
+    bool removeImage = false,
   }) async {
     // Only include fields that are explicitly supplied — PATCH-like semantics.
     final body = <String, dynamic>{};
@@ -215,10 +217,36 @@ class TripService {
     if (maxMembers != null) body['max_members'] = maxMembers;
     if (interestIds != null) body['interest_ids'] = interestIds;
 
-    final response = await _client.put(
-      ApiConstants.tripById(tripId),
-      body: body,
-    );
+    dynamic response;
+    if (imagePath != null && imagePath.isNotEmpty) {
+      final fields = <String, String>{
+        '_method': 'PUT',
+      };
+      body.forEach((key, value) {
+        if (key == 'interest_ids') {
+          final list = value as List<int>;
+          for (var i = 0; i < list.length; i++) {
+            fields['${key}[${i}]'] = list[i].toString();
+          }
+        } else {
+          fields[key] = value.toString();
+        }
+      });
+      response = await _client.postMultipart(
+        ApiConstants.tripById(tripId),
+        fileField: 'image',
+        filePath: imagePath,
+        fields: fields,
+      );
+    } else {
+      if (removeImage) {
+        body['remove_image'] = true;
+      }
+      response = await _client.put(
+        ApiConstants.tripById(tripId),
+        body: body,
+      );
+    }
 
     final data = response.dataAsMap;
     final tripJson = data['trip'] as Map<String, dynamic>?;

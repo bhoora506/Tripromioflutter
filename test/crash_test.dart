@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tripromio/data/models/user_model.dart';
-import 'package:tripromio/presentation/screens/profile/edit_profile_screen.dart';
+import 'package:travelromio/data/models/user_model.dart';
+import 'package:travelromio/presentation/screens/profile/edit_profile_screen.dart';
 
 void main() {
   testWidgets('Test EditProfileScreen Travel Style crash', (WidgetTester tester) async {

@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_exception.dart';
@@ -48,6 +50,10 @@ class _EditTripScreenState extends State<EditTripScreen> {
   bool _loadingInterests = true;
   bool _submitting = false;
   bool _initialized = false;
+
+  String? _selectedImagePath;
+  bool _removeImage = false;
+  final _imagePicker = ImagePicker();
 
   /// Whether all form fields are editable (draft / published).
   bool get _fullEdit {
@@ -187,6 +193,31 @@ class _EditTripScreenState extends State<EditTripScreen> {
     }
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    if (!_fullEdit) return;
+    try {
+      final picked = await _imagePicker.pickImage(source: source);
+      if (picked != null) {
+        setState(() {
+          _selectedImagePath = picked.path;
+          _removeImage = false;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick image: $e')),
+      );
+    }
+  }
+
+  void _onRemoveImage() {
+    if (!_fullEdit) return;
+    setState(() {
+      _selectedImagePath = null;
+      _removeImage = true;
+    });
+  }
+
   void _showTripTypePicker() {
     if (!_fullEdit) return;
     showModalBottomSheet<void>(
@@ -298,7 +329,9 @@ class _EditTripScreenState extends State<EditTripScreen> {
           newMaxMembers == null &&
           newBudgetMin == null &&
           newBudgetMax == null &&
-          newInterestIds == null) {
+          newInterestIds == null &&
+          _selectedImagePath == null &&
+          !_removeImage) {
         _showSnack('No changes to save.');
         if (mounted) setState(() => _submitting = false);
         return;
@@ -316,6 +349,8 @@ class _EditTripScreenState extends State<EditTripScreen> {
         budgetMin: newBudgetMin,
         budgetMax: newBudgetMax,
         interestIds: newInterestIds,
+        imagePath: _selectedImagePath,
+        removeImage: _removeImage,
       );
       if (!mounted) return;
       _showSnack('Trip updated!', isSuccess: true);
@@ -477,6 +512,109 @@ class _EditTripScreenState extends State<EditTripScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                    // Banner Image
+                    if (_fullEdit) ...[
+                      if (_selectedImagePath == null && (_trip?.imageUrl == null || _removeImage))
+                        GestureDetector(
+                          onTap: () => _pickImage(ImageSource.gallery),
+                          child: Container(
+                            height: 160,
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceLight,
+                              borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+                              border: Border.all(color: AppColors.borderLight, width: 2),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.add_photo_alternate_rounded,
+                                    size: 40, color: AppColors.primary),
+                                const SizedBox(height: AppConstants.spacingSm),
+                                Text(
+                                  'Add Trip Banner',
+                                  style: GoogleFonts.nunito(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimaryLight,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else ...[
+                        Stack(
+                          children: [
+                            Container(
+                              height: 160,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+                                image: DecorationImage(
+                                  image: _selectedImagePath != null
+                                      ? FileImage(File(_selectedImagePath!)) as ImageProvider
+                                      : NetworkImage(_trip!.imageUrl!),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => _pickImage(ImageSource.gallery),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.1),
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        'Change Banner',
+                                        style: GoogleFonts.nunito(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: _onRemoveImage,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.1),
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(Icons.close_rounded,
+                                          size: 16, color: AppColors.error),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: AppConstants.spacingMd),
+                    ],
+
                   // Title
                   _EditLabel('Trip Title *'),
                   const SizedBox(height: AppConstants.spacingXs),

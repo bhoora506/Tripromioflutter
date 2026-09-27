@@ -2,7 +2,7 @@
 /// Group constants logically so they can be found and updated quickly.
 abstract final class AppConstants {
   // ── App meta ──────────────────────────────────────────────────────────────
-  static const String appName = 'Tripromio';
+  static const String appName = 'Travelromio';
   static const String appVersion = '1.0.0';
 
   // ── API ───────────────────────────────────────────────────────────────────

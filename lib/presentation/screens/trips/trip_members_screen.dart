@@ -1,3 +1,4 @@
+import '../connections/conversation_detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,6 +8,9 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/trip_member_model.dart';
 import '../../../data/services/trip_service.dart';
+import '../../../data/services/chat_service.dart';
+import '../../../data/services/auth_service.dart';
+import '../../../routes/app_routes.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TripMembersScreen
@@ -21,18 +25,30 @@ class TripMembersScreen extends StatefulWidget {
 
 class _TripMembersScreenState extends State<TripMembersScreen> {
   final _tripService = TripService();
+  final _authService = AuthService();
 
   int? _tripId;
+  int? _currentUserId;
   List<TripMemberModel> _members = [];
   bool _loading = true;
   String? _errorMessage;
   bool _initialized = false;
+
+  Future<void> _loadCurrentUser() async {
+    try {
+      final user = await _authService.getCurrentUser();
+      if (mounted) setState(() => _currentUserId = user.id);
+    } catch (e) {
+      debugPrint('Error loading current user: $e');
+    }
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_initialized) {
       _initialized = true;
+      _loadCurrentUser();
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is int) {
         _tripId = args;
@@ -49,6 +65,7 @@ class _TripMembersScreenState extends State<TripMembersScreen> {
   @override
   void dispose() {
     _tripService.dispose();
+    _authService.dispose();
     super.dispose();
   }
 
@@ -166,7 +183,10 @@ class _TripMembersScreenState extends State<TripMembersScreen> {
         itemCount: _members.length,
         itemBuilder: (context, index) {
           final member = _members[index];
-          return _MemberCard(member: member);
+          return _MemberCard(
+            member: member,
+            currentUserId: _currentUserId,
+          );
         },
       ),
     );
@@ -175,14 +195,53 @@ class _TripMembersScreenState extends State<TripMembersScreen> {
 
 // ── Member card ──────────────────────────────────────────────────────────────
 
-class _MemberCard extends StatelessWidget {
-  const _MemberCard({required this.member});
-
+class _MemberCard extends StatefulWidget {
+  const _MemberCard({required this.member, this.currentUserId});
   final TripMemberModel member;
+  final int? currentUserId;
+
+  @override
+  State<_MemberCard> createState() => _MemberCardState();
+}
+
+class _MemberCardState extends State<_MemberCard> {
+  bool _startingChat = false;
+
+  Future<void> _startChat() async {
+    if (widget.member.userId == widget.currentUserId) return;
+    setState(() => _startingChat = true);
+    try {
+      final chatService = ChatService();
+      final conv = await chatService.createConversation(recipientId: widget.member.userId);
+      if (!mounted) return;
+            Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ConversationDetailScreen(conversation: conv),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      if (mounted) setState(() => _startingChat = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final member = widget.member;
     final bool isOwner = member.role.toLowerCase() == 'owner';
+    final bool canMessage = widget.currentUserId != null &&
+        member.userId != widget.currentUserId &&
+        member.status.toLowerCase() == 'active';
+
+    debugPrint('MEMBER CARD - name: ${member.userName}, memberId: ${member.userId}, '
+        'currentUserId: ${widget.currentUserId}, '
+        'memberStatus: ${member.status}, '
+        'canMessage: $canMessage');
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppConstants.spacingSm),
@@ -222,6 +281,22 @@ class _MemberCard extends StatelessWidget {
               ],
             ),
           ),
+          if (canMessage)
+            _startingChat
+                ? const Padding(
+                    padding: EdgeInsets.only(right: 12),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.chat_bubble_outline_rounded),
+                    color: AppColors.primary,
+                    onPressed: _startChat,
+                    tooltip: 'Message',
+                  ),
           _RoleBadge(role: member.role),
         ],
       ),

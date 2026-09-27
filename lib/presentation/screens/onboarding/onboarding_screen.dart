@@ -404,7 +404,7 @@ class _AppBadge extends StatelessWidget {
           Icon(Icons.flight_takeoff_rounded, size: 13, color: color),
           const SizedBox(width: 5),
           Text(
-            'Tripromio',
+            'Travelromio',
             style: GoogleFonts.nunito(
               fontSize: 11,
               fontWeight: FontWeight.w700,

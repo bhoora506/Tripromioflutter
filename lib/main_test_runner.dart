@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:tripromio/data/services/auth_service.dart';
-import 'package:tripromio/data/services/profile_service.dart';
-import 'package:tripromio/core/storage/token_storage.dart';
-import 'package:tripromio/core/network/api_exception.dart';
+import 'package:travelromio/data/services/auth_service.dart';
+import 'package:travelromio/data/services/profile_service.dart';
+import 'package:travelromio/core/storage/token_storage.dart';
+import 'package:travelromio/core/network/api_exception.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:tripromio/presentation/screens/profile/profile_screen.dart';
+import 'package:travelromio/presentation/screens/profile/profile_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

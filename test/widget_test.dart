@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tripromio/main.dart';
-import 'package:tripromio/routes/app_routes.dart';
-import 'package:tripromio/routes/app_router.dart';
+import 'package:travelromio/main.dart';
+import 'package:travelromio/routes/app_routes.dart';
+import 'package:travelromio/routes/app_router.dart';
 
 void main() {
   test('TripromioApp configuration smoke test', () {
