@@ -191,12 +191,15 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   ),
                 ),
                 const SizedBox(width: AppConstants.spacingMd),
-                Text(
-                  'Messages',
-                  style: GoogleFonts.nunito(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                Flexible(
+                  child: Text(
+                    'Messages',
+                    style: GoogleFonts.nunito(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

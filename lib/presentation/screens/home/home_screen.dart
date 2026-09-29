@@ -546,9 +546,9 @@ class _HomeHeader extends StatelessWidget {
                 const SizedBox(width: AppConstants.spacingMd),
                 const _StatSkeleton(),
               ] else ...[
-                _StatBadge(value: '${stats?.tripsCount ?? 0}', label: 'Trips'),
+                Expanded(child: _StatBadge(value: '${stats?.tripsCount ?? 0}', label: 'Trips')),
                 const SizedBox(width: AppConstants.spacingMd),
-                _StatBadge(value: '${stats?.connectionsCount ?? 0}', label: 'Connections'),
+                Expanded(child: _StatBadge(value: '${stats?.connectionsCount ?? 0}', label: 'Connections')),
               ],
             ],
           ),

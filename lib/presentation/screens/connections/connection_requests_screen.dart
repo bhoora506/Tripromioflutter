@@ -96,12 +96,15 @@ class _ConnectionRequestsScreenState extends State<ConnectionRequestsScreen>
                       ),
                     ),
                     const SizedBox(width: AppConstants.spacingMd),
-                    Text(
-                      'Connection Requests',
-                      style: GoogleFonts.nunito(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                    Expanded(
+                      child: Text(
+                        'Connection Requests',
+                        style: GoogleFonts.nunito(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],

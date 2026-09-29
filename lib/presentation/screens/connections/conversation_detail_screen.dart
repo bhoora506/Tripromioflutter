@@ -559,7 +559,7 @@ class _MessageBubble extends StatelessWidget {
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.72,
+          maxWidth: MediaQuery.sizeOf(context).width * 0.72,
         ),
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 4),

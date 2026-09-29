@@ -185,12 +185,15 @@ class _MyConnectionsScreenState extends State<MyConnectionsScreen> {
                   ),
                 ),
                 const SizedBox(width: AppConstants.spacingMd),
-                Text(
-                  'My Connections',
-                  style: GoogleFonts.nunito(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                Flexible(
+                  child: Text(
+                    'My Connections',
+                    style: GoogleFonts.nunito(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

@@ -73,6 +73,9 @@ flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   image_path: "assets/images/tripromio_icon.jpg"
+  image_path_android: "assets/images/tripromio_icon_foreground.png"
+  adaptive_icon_background: "#0a83ee"
+  adaptive_icon_foreground: "assets/images/tripromio_icon_foreground.png"
   min_sdk_android: 21
 
 # For information on the generic Dart part of this file, see the

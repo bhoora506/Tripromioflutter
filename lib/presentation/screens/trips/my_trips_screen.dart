@@ -89,12 +89,15 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                         ),
                       ),
                       const SizedBox(width: AppConstants.spacingMd),
-                      Text(
-                        'My Trips',
-                        style: GoogleFonts.nunito(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                      Flexible(
+                        child: Text(
+                          'My Trips',
+                          style: GoogleFonts.nunito(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],

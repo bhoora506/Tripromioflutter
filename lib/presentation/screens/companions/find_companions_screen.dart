@@ -287,23 +287,26 @@ class _FcHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppConstants.spacingMd),
-            RichText(
-              text: TextSpan(children: [
-                TextSpan(
-                  text: 'Trip',
-                  style: GoogleFonts.nunito(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primaryLight),
-                ),
-                TextSpan(
-                  text: 'romio',
-                  style: GoogleFonts.nunito(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white),
-                ),
-              ]),
+            Flexible(
+              child: RichText(
+                overflow: TextOverflow.ellipsis,
+                text: TextSpan(children: [
+                  TextSpan(
+                    text: 'Trip',
+                    style: GoogleFonts.nunito(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryLight),
+                  ),
+                  TextSpan(
+                    text: 'romio',
+                    style: GoogleFonts.nunito(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white),
+                  ),
+                ]),
+              ),
             ),
           ]),
           const SizedBox(height: AppConstants.spacingLg),

@@ -176,6 +176,8 @@ class _CompanionDetailScreenState extends State<CompanionDetailScreen> {
     final photoUrl = _resolvePhotoUrl(companion.profilePhotoUrl);
     final styleLabel = _styleLabels[companion.travelStyle] ?? companion.travelStyle;
     final bottomPad = MediaQuery.paddingOf(context).bottom;
+    final screenH = MediaQuery.sizeOf(context).height;
+    final heroExpandedHeight = (screenH * 0.35).clamp(220.0, 320.0);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -183,7 +185,7 @@ class _CompanionDetailScreenState extends State<CompanionDetailScreen> {
         slivers: [
           // ── App Bar ─────────────────────────────────────────────────────────
           SliverAppBar(
-            expandedHeight: 300,
+            expandedHeight: heroExpandedHeight,
             pinned: true,
             backgroundColor: AppColors.surfaceLight,
             leading: GestureDetector(

@@ -466,12 +466,15 @@ class _EditTripScreenState extends State<EditTripScreen> {
                       ),
                     ),
                     const SizedBox(width: AppConstants.spacingMd),
-                    Text(
-                      'Edit Trip',
-                      style: GoogleFonts.nunito(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                    Flexible(
+                      child: Text(
+                        'Edit Trip',
+                        style: GoogleFonts.nunito(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],

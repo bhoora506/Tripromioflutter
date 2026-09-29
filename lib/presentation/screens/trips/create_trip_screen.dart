@@ -327,12 +327,15 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   ),
                 ),
                 const SizedBox(width: AppConstants.spacingMd),
-                Text(
-                  'Create Trip',
-                  style: GoogleFonts.nunito(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                Flexible(
+                  child: Text(
+                    'Create Trip',
+                    style: GoogleFonts.nunito(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

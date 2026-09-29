@@ -708,9 +708,11 @@ class _TripHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
+    final screenH = MediaQuery.sizeOf(context).height;
+    final heroHeight = (screenH * 0.32).clamp(200.0, 300.0);
     return Stack(children: [
       SizedBox(
-        height: 280,
+        height: heroHeight,
         width: double.infinity,
         child: imageUrl != null
             ? Image.network(
